@@ -3,7 +3,6 @@
 #include "gpscalc.h"
 #include "config.h"
 
-// 默认从开屏提示页启动
 PageState MenuManager::currentPage = PAGE_SPLASH;
 int MenuManager::cursorIndex = 0;
 bool MenuManager::isCursorVisible = true;
@@ -12,9 +11,11 @@ int MenuManager::setScroll = 0;
 bool MenuManager::isEditing = false;
 int MenuManager::viewLapIdx = 0;
 
+uint32_t MenuManager::lastActiveTime = 0;
+bool MenuManager::isScreenOff = false;
+
 SystemConfig tempCfg;
 
-// 动画初始值
 float MenuManager::currentPageX = 0;
 float MenuManager::currentCursorY = 45;
 float MenuManager::visualSetCursorY = 0;
@@ -27,11 +28,21 @@ float MenuManager::smoothLerp(float current, float target, float speed) {
 
 void MenuManager::handleInput() {
     BtnEvent evt = HAL::getEvent();
+    
+    if (evt != BTN_NONE) {
+        if (isScreenOff) {
+            isScreenOff = false;
+            HAL::getDisplay()->setPowerSave(0);
+            lastActiveTime = millis();
+            return; 
+        }
+        lastActiveTime = millis();
+    }
+
     if (evt == BTN_NONE) return;
 
     switch (currentPage) {
         case PAGE_SPLASH:
-            // 任意键均可跳过开屏，进入 Start 菜单
             currentPage = PAGE_START;
             break;
 
@@ -49,14 +60,16 @@ void MenuManager::handleInput() {
         case PAGE_SETTINGS:
             if (!isEditing) {
                 if (evt == BTN_UP_PRESSED) { setIdx--; if(setIdx < 0) setIdx = 0; }
-                // 将最大限制从 8 改为 9，允许光标落到空白项
                 if (evt == BTN_DOWN_PRESSED) { setIdx++; if(setIdx > 9) setIdx = 9; }
                 if (evt == BTN_LEFT_PRESSED) { currentPage = PAGE_START; } 
                 if (evt == BTN_RIGHT_PRESSED) {
                     if (setIdx == 6) { saveConfig(); currentPage = PAGE_START; } 
                     else if (setIdx == 7) { HAL::sleepDevice(); }                
                     else if (setIdx == 8) { currentPage = PAGE_DEV; }
-                    else if (setIdx == 9) { /* 选空项目，什么都不做 */ }
+                    else if (setIdx == 9) { 
+                        Serial1.println("$PCAS04,1*18"); 
+                        currentPage = PAGE_START;
+                    }
                     else { isEditing = true; tempCfg = sysCfg; }                 
                 }
                 if (setIdx < setScroll) setScroll = setIdx;
@@ -106,10 +119,17 @@ void MenuManager::handleInput() {
 }
 
 void MenuManager::update() {
+    if (sysCfg.screen_off > 0 && !isScreenOff) {
+        if (millis() - lastActiveTime > sysCfg.screen_off * 1000UL) {
+            isScreenOff = true;
+            HAL::getDisplay()->setPowerSave(1); 
+        }
+    }
+    if (isScreenOff) return; 
+
     auto u8g2 = HAL::getDisplay();
     u8g2->clearBuffer();
 
-    // 页面横向平滑滑动计算
     float targetX = 0;
     if (currentPage == PAGE_SPLASH) targetX = 0;
     else if (currentPage == PAGE_START) targetX = -128;
@@ -133,20 +153,15 @@ void MenuManager::update() {
     u8g2->sendBuffer();
 }
 
-// 【新增】：开屏欢迎页 (支持中文)
 void MenuManager::drawSplash(int ox) {
     auto u8g2 = HAL::getDisplay();
-    // 使用 u8g2 内置的国标中文简装字库
     u8g2->setFont(u8g2_font_wqy12_t_gb2312); 
-    
-    // 你可以在这里自由修改中文内容
     u8g2->setCursor(ox + 5, 12); u8g2->print("欢迎使用跑表");
     u8g2->setCursor(ox + 5, 26); u8g2->print("卫星闪烁后起跑");
     u8g2->setCursor(ox + 5, 40); u8g2->print("右键确认,左键返回");
     u8g2->setCursor(ox + 5, 54); u8g2->print("我懒得调bug喵(");
-
     u8g2->setFont(u8g2_font_4x6_tf);
-    u8g2->drawStr(ox + 65, 63, "Press RIGHT ->");
+    u8g2->drawStr(ox + 70, 63, "Press RIGHT ->");
 }
 
 void MenuManager::drawStartMenu(int ox) {
@@ -157,23 +172,19 @@ void MenuManager::drawStartMenu(int ox) {
     if (GPSCalc::satellites > 4) u8g2->drawStr(ox + 40, 10, "[SAT:OK]");
     else u8g2->drawStr(ox + 40, 10, "[SAT:--]");
     
-    // 【新增】：电池图标与电量百分比
     int pct = HAL::getBatteryPercent();
-    u8g2->drawFrame(ox + 93, 2, 18, 8); // 电池主体外框
-    u8g2->drawBox(ox + 111, 4, 2, 4);   // 电池正极触头
-    int fillW = (pct * 14) / 100;       // 计算实心填充宽度 (最大14像素)
-    if(fillW > 0) u8g2->drawBox(ox + 95, 4, fillW, 4); // 画电量实心格
-    
+    u8g2->drawFrame(ox + 93, 2, 18, 8); 
+    u8g2->drawBox(ox + 111, 4, 2, 4);   
+    int fillW = (pct * 14) / 100;       
+    if(fillW > 0) u8g2->drawBox(ox + 95, 4, fillW, 4); 
     u8g2->setFont(u8g2_font_5x8_tf);
     u8g2->setCursor(ox + 114, 10);
     u8g2->print(pct); u8g2->print("%");
 
-    // 日期时间
     u8g2->setFont(u8g2_font_6x10_tf);
     u8g2->setCursor(ox + 0, 25);
     u8g2->print(GPSCalc::getDateTime().c_str());
 
-    // 光标平滑动画
     float targetY = 45 + cursorIndex * 15;
     currentCursorY = smoothLerp(currentCursorY, targetY, 0.3f);
 
@@ -191,8 +202,7 @@ void MenuManager::drawSettings(int ox) {
     auto u8g2 = HAL::getDisplay();
     u8g2->setFont(u8g2_font_6x10_tf);
 
-    // 数组增加到 10 项，最后一项留空
-    const char* titles[] = {"mode:", "freq:", "track:", "scr_off:", "pwr_btn:", "storage:", "[save]", "[pwr_off]", "[dev_page]", ""};
+    const char* titles[] = {"mode:", "freq:", "track:", "scr_off:", "pwr_btn:", "storage:", "[save]", "[pwr_off]", "[dev_page]", "[gps_stdby]"};
     char vFreq[10], vScr[10], vStore[10];
     sprintf(vFreq, sysCfg.record_freq == 0.5 ? "0.5Hz" : "%dHz", (int)sysCfg.record_freq);
     sprintf(vScr, sysCfg.screen_off == 0 ? "never" : "%ds", sysCfg.screen_off);
@@ -203,30 +213,29 @@ void MenuManager::drawSettings(int ox) {
     visualSetScrollY = smoothLerp(visualSetScrollY, setScroll * 12, 0.2f);
     visualSetCursorY = smoothLerp(visualSetCursorY, setIdx * 12, 0.3f);
 
-    for (int i=0; i<10; i++) {  // 循环改为 10 次
+    for (int i=0; i<10; i++) {  
         float itemY = 20 + i * 12 - visualSetScrollY;
-        
         if (itemY < 5 || itemY > 70) continue; 
-        
         u8g2->drawStr(ox + 10, (int)itemY, titles[i]);
         u8g2->drawStr(ox + 75, (int)itemY, vals[i]);
     }
 
     float curY = 20 + visualSetCursorY - visualSetScrollY;
-    // 如果光标在最后一行空白处，则不显示光标或正常显示均可
-    if (setIdx != 9) u8g2->drawStr(ox + 0, (int)curY, isEditing ? "*" : ">");
+    u8g2->drawStr(ox + 0, (int)curY, isEditing ? "*" : ">"); 
 }
-
 
 void MenuManager::drawDevPage(int ox) {
     auto u8g2 = HAL::getDisplay();
     u8g2->setFont(u8g2_font_5x8_tf);
-    u8g2->setCursor(ox + 0, 10); u8g2->print("Lat: "); u8g2->print(GPSCalc::homeLat == 0 ? 0 : GPSCalc::lastLat, 6);
-    u8g2->setCursor(ox + 0, 20); u8g2->print("Lng: "); u8g2->print(GPSCalc::homeLat == 0 ? 0 : GPSCalc::lastLng, 6);
-    u8g2->setCursor(ox + 0, 30); u8g2->print("Height: "); u8g2->print(GPSCalc::altitude); u8g2->print("m");
-    u8g2->setCursor(ox + 0, 40); u8g2->print("Speed: "); u8g2->print(GPSCalc::currentSpeed); u8g2->print("kmh");
-    u8g2->setCursor(ox + 0, 50); u8g2->print("Angle: "); u8g2->print(GPSCalc::course);
-    u8g2->setCursor(ox + 0, 60); u8g2->print("Timestamp: "); u8g2->print(millis());
+    
+    u8g2->setCursor(ox + 0, 10); u8g2->print("Acc: "); u8g2->print(GPSCalc::accuracyPct); u8g2->print("%");
+    u8g2->setCursor(ox + 60, 10); u8g2->print("l:"); u8g2->print(GPSCalc::satellites); u8g2->print(" c:"); u8g2->print(GPSCalc::satsInView);
+    
+    u8g2->setCursor(ox + 0, 20); u8g2->print("Lat: "); u8g2->print(GPSCalc::homeLat == 0 ? 0 : GPSCalc::lastLat, 6);
+    u8g2->setCursor(ox + 0, 30); u8g2->print("Lng: "); u8g2->print(GPSCalc::homeLat == 0 ? 0 : GPSCalc::lastLng, 6);
+    u8g2->setCursor(ox + 0, 40); u8g2->print("Height: "); u8g2->print(GPSCalc::altitude); u8g2->print("m");
+    u8g2->setCursor(ox + 0, 50); u8g2->print("Speed: "); u8g2->print(GPSCalc::currentSpeed); u8g2->print("kmh");
+    u8g2->setCursor(ox + 0, 60); u8g2->print("Angle: "); u8g2->print(GPSCalc::course);
 }
 
 void MenuManager::drawSport1(int ox) {

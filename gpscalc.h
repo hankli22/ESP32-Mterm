@@ -6,11 +6,11 @@
 
 #define MAX_LAPS 10
 #define MAX_TRACK_POINTS 180
-#define PACE_WINDOW_SIZE 10 // 10秒滑动窗口
+#define PACE_WINDOW_SIZE 10
 
 struct LapInfo {
     int timeSec;
-    float pace; // 本圈平均配速 (min/km)
+    float pace;
     int trackStartIdx;
     int trackEndIdx;
 };
@@ -26,14 +26,16 @@ public:
     static bool isRunning;
     static float totalDistance; 
     static float currentSpeed;  
-    static float slidingPace;   // 10s滑动窗口配速
+    static float slidingPace;   
     static int paceMin;         
     static int paceSec;
     static int laps;
     static int durationSec;     
-    static int satellites;
     
-    // 定位调试信息
+    // 定位调试与质量信息
+    static int satellites;
+    static int satsInView;   // 捕捉到的卫星数
+    static int accuracyPct;  // 精准度百分比
     static double altitude;
     static double course;
     static double homeLat, homeLng, lastLat, lastLng;

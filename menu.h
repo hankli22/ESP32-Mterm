@@ -1,7 +1,8 @@
 #ifndef MENU_H
 #define MENU_H
 
-// 加入 PAGE_SPLASH 启动页面
+#include <stdint.h>
+
 enum PageState { PAGE_SPLASH, PAGE_START, PAGE_SETTINGS, PAGE_DEV, PAGE_SPORT1, PAGE_SPORT2, PAGE_SUMMARY };
 
 class MenuManager {
@@ -17,11 +18,13 @@ private:
     static bool isEditing;
     static int viewLapIdx; 
     
-    // 全局横向与纵向平滑动画变量
+    static uint32_t lastActiveTime;
+    static bool isScreenOff;
+    
+    static float currentCursorY;
     static float currentPageX;
-    static float currentCursorY;     // Start菜单纵向光标
-    static float visualSetCursorY;   // Settings菜单纵向光标
-    static float visualSetScrollY;   // Settings菜单全局纵向滚动
+    static float visualSetCursorY;
+    static float visualSetScrollY;
     
     static void drawSplash(int ox);
     static void drawStartMenu(int ox);

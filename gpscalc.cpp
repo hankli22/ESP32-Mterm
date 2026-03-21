@@ -9,7 +9,11 @@ int GPSCalc::paceMin = 0;
 int GPSCalc::paceSec = 0;
 int GPSCalc::laps = 0;
 int GPSCalc::durationSec = 0;
+
 int GPSCalc::satellites = 0;
+int GPSCalc::satsInView = 0;
+int GPSCalc::accuracyPct = 0;
+
 double GPSCalc::altitude = 0;
 double GPSCalc::course = 0;
 double GPSCalc::homeLat = 0, GPSCalc::homeLng = 0;
@@ -29,6 +33,7 @@ uint32_t GPSCalc::lastLapTime = 0;
 uint32_t GPSCalc::lastTrackSaveTime = 0;
 
 static TinyGPSPlus gps;
+static TinyGPSCustom satsInViewCustom(gps, "GPGSV", 3);
 
 void GPSCalc::init() {
     Serial1.begin(9600, SERIAL_8N1, 17, 18);
@@ -42,19 +47,14 @@ void GPSCalc::startRun() {
     totalDistance = 0; laps = 0; trackPointsCount = 0;
     homeLat = 0; durationSec = 0;
     runStartTime = millis(); lastLapTime = millis();
-    
     for(int i=0; i<PACE_WINDOW_SIZE; i++) paceBuffer[i] = 0;
-    lastDistForPace = 0;
-    lastPaceUpdate = millis();
-    
+    lastDistForPace = 0; lastPaceUpdate = millis();
     lapHistory[0].trackStartIdx = 0;
 }
 
 void GPSCalc::stopRun() { 
     isRunning = false; 
-    if (laps < MAX_LAPS) {
-        lapHistory[laps].trackEndIdx = trackPointsCount - 1;
-    }
+    if (laps < MAX_LAPS) lapHistory[laps].trackEndIdx = trackPointsCount - 1;
 }
 
 static float calcDist(double lat1, double lng1, double lat2, double lng2) {
@@ -83,7 +83,17 @@ String GPSCalc::getDateTime() {
 
 void GPSCalc::process() {
     while (Serial1.available() > 0) gps.encode(Serial1.read());
+    
     satellites = gps.satellites.value();
+    if (satsInViewCustom.isUpdated() && satsInViewCustom.isValid()) {
+        satsInView = atoi(satsInViewCustom.value());
+    }
+
+    double h = gps.hdop.hdop();
+    if (h > 0) {
+        int acc = 100 - (int)((h - 1.0) * 15);
+        accuracyPct = constrain(acc, 0, 100);
+    } else accuracyPct = 0;
 
     if (!gps.location.isValid() || gps.location.age() > 2000) return;
 
@@ -97,7 +107,6 @@ void GPSCalc::process() {
     uint32_t now = millis();
     durationSec = (now - runStartTime) / 1000;
 
-    // --- 10秒滑动窗口实时配速计算 ---
     if (now - lastPaceUpdate >= 1000) {
         float distThisSec = totalDistance - lastDistForPace;
         lastDistForPace = totalDistance;
@@ -110,7 +119,7 @@ void GPSCalc::process() {
         
         if (distInWindow > 0.5) {
             float speedMps = distInWindow / (float)PACE_WINDOW_SIZE;
-            slidingPace = 16.6667f / speedMps; // min/km
+            slidingPace = 16.6667f / speedMps;
             paceMin = (int)slidingPace;
             paceSec = (int)((slidingPace - paceMin) * 60);
         } else {
@@ -125,13 +134,9 @@ void GPSCalc::process() {
         return;
     }
 
-    // --- 锚点法：完美解决慢走距离被吞的问题 ---
     float d = calcDist(lat, lng, lastLat, lastLng);
-    if (d >= 2.0 && d < 30.0) { // 真实移动超过 2.0 米才记录
-        totalDistance += d; 
-        lastLat = lat; // 更新锚点
-        lastLng = lng;
-        
+    if (d >= 2.0 && d < 30.0) { 
+        totalDistance += d; lastLat = lat; lastLng = lng;
         if (now - lastTrackSaveTime > 2000 && trackPointsCount < MAX_TRACK_POINTS) {
             trackX[trackPointsCount] = (float)((lng - homeLng) * 111320.0 * cos(homeLat * 0.01745));
             trackY[trackPointsCount] = (float)((lat - homeLat) * 111320.0);
@@ -139,13 +144,11 @@ void GPSCalc::process() {
         }
     }
 
-    // --- 250m 智能分圈 ---
     float distToHome = calcDist(lat, lng, homeLat, homeLng);
     if (distToHome < 15.0 && totalDistance > (laps * 250 + 200)) {
         lapHistory[laps].timeSec = (now - lastLapTime) / 1000;
-        lapHistory[laps].pace = lapHistory[laps].timeSec / 0.25f / 60.0f; // min/km
+        lapHistory[laps].pace = lapHistory[laps].timeSec / 0.25f / 60.0f;
         lapHistory[laps].trackEndIdx = trackPointsCount > 0 ? trackPointsCount - 1 : 0;
-        
         laps++;
         if (laps < MAX_LAPS) lapHistory[laps].trackStartIdx = trackPointsCount;
         lastLapTime = now;
