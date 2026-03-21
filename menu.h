@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-enum PageState { PAGE_SPLASH, PAGE_START, PAGE_SETTINGS, PAGE_DEV, PAGE_SPORT1, PAGE_SPORT2, PAGE_SUMMARY };
+enum PageState { PAGE_SPLASH, PAGE_START, PAGE_SETTINGS, PAGE_DEV_MENU, PAGE_DEV, PAGE_SAT_TXT, PAGE_SAT_GUI, PAGE_SPORT1, PAGE_SPORT2, PAGE_SUMMARY };
 
 class MenuManager {
 public:
@@ -34,8 +34,14 @@ private:
     static void drawSport2(int ox);
     static void drawSummary(int ox);
     static void drawTrackMap(int ox, int oy, int lapIdx);
+    static void drawDevMenu(int ox);
+    static void drawSatTxt(int ox);
+    static void drawSatGui(int ox);
     
     static float smoothLerp(float current, float target, float speed = 0.25f);
+
+    static int devMenuIdx;
+    static int satTxtScroll;
 };
 
 #endif

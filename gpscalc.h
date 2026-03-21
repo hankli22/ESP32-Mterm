@@ -8,6 +8,15 @@
 #define MAX_TRACK_POINTS 180
 #define PACE_WINDOW_SIZE 10
 
+struct SatData {
+    uint8_t sys; // 0:GPS, 1:BDS, 2:GLO, 3:SBS
+    uint8_t prn;
+    uint8_t snr;
+    uint8_t ele;
+    uint16_t azi;
+    uint32_t lastSeen;
+};
+
 struct LapInfo {
     int timeSec;
     float pace;
@@ -45,7 +54,15 @@ public:
     static float trackY[MAX_TRACK_POINTS];
     static int trackPointsCount;
 
+// --- 新增卫星详情数组 ---
+    static SatData sats[40];
+    static int satCount;
+    static int sysTracked[4];
+    static int sysInView[4];
+
 private:
+    static void parseGSV(const char* nmea);
+    static void cleanupSats();
     static float paceBuffer[PACE_WINDOW_SIZE];
     static int paceBufIdx;
     static uint32_t lastPaceUpdate;
