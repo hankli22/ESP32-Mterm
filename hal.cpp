@@ -70,7 +70,7 @@ BtnEvent HAL::getEvent() {
 
 U8G2* HAL::getDisplay() { return &u8g2; }
 
-void HAL::sleepDevice() {
+void HAL::sleepDevice() { 
     u8g2.clearBuffer();
     u8g2.setFont(u8g2_font_6x12_tr);
     u8g2.drawStr(15, 30, "Release Button");

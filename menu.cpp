@@ -29,183 +29,127 @@ float MenuManager::smoothLerp(float current, float target, float speed) {
 }
 
 void MenuManager::handleInput() {
-  BtnEvent evt = HAL::getEvent();
+    BtnEvent evt = HAL::getEvent();
 
-  if (evt != BTN_NONE) {
-    if (isScreenOff) {
-      isScreenOff = false;
-      HAL::getDisplay()->setPowerSave(0);
-      lastActiveTime = millis();
-      return;
+    // 1. 【核心修复】：找回息屏唤醒拦截逻辑！
+    // 必须放在 switch 之前，一旦息屏，第一下按键绝对不触发任何菜单操作
+    if (evt != BTN_NONE) {
+        if (isScreenOff) {
+            isScreenOff = false;
+            HAL::getDisplay()->setPowerSave(0); // 唤醒 OLED 硬件
+            lastActiveTime = millis();          // 重置倒计时
+            return; 
+        }
+        lastActiveTime = millis(); // 只要有按键操作，重置息屏倒计时
     }
-    lastActiveTime = millis();
-  }
 
-  if (evt == BTN_NONE) return;
+    if (evt == BTN_NONE) return;
 
-  switch (currentPage) {
-    case PAGE_SPLASH:
-      currentPage = PAGE_START;
-      break;
-
-    case PAGE_START:
-      if (evt == BTN_UP_PRESSED) {
-        cursorIndex = 0;
-        isCursorVisible = true;
-      }
-      if (evt == BTN_DOWN_PRESSED) {
-        cursorIndex = 1;
-        isCursorVisible = true;
-      }
-      if (evt == BTN_LEFT_PRESSED) {
-        isCursorVisible = false;
-        cursorIndex = 0;
-      }
-      if (evt == BTN_RIGHT_PRESSED) {
-        if (!isCursorVisible) {
-          isCursorVisible = true;
-          return;
-        }
-        if (cursorIndex == 0) {
-          GPSCalc::startRun();
-          currentPage = PAGE_SPORT1;
-        }
-        if (cursorIndex == 1) {
-          currentPage = PAGE_SETTINGS;
-          setIdx = 0;
-          setScroll = 0;
-          isEditing = false;
-        }
-      }
-      break;
-
-    case PAGE_SETTINGS:
-      if (!isEditing) {
-        if (evt == BTN_UP_PRESSED) {
-          setIdx--;
-          if (setIdx < 0) setIdx = 0;
-        }
-        if (evt == BTN_DOWN_PRESSED) {
-          setIdx++;
-          if (setIdx > 11) setIdx = 11;
-        }  // 最大上限改为 11
-        if (evt == BTN_LEFT_PRESSED) { currentPage = PAGE_START; }
-        if (evt == BTN_RIGHT_PRESSED) {
-          if (setIdx == 7) {
-            saveConfig();
+    switch (currentPage) {
+        case PAGE_SPLASH:
             currentPage = PAGE_START;
-          }                                              //[save]
-          else if (setIdx == 8) { HAL::sleepDevice(); }  //[pwr_off]
-          else if (setIdx == 9) {
-            currentPage = PAGE_DEV_MENU;
-            devMenuIdx = 0;
-          }                         // [dev_page]
-          else if (setIdx == 10) {  // [gps_stdby]
-            Serial1.println("$PCAS04,1*18");
-            currentPage = PAGE_START;
-          } else if (setIdx == 11) { /* 选到了空白项，什么都不做 */
-          } else {
-            isEditing = true;
-            tempCfg = sysCfg;
-          }
-        }
-        if (setIdx < setScroll) setScroll = setIdx;
-        if (setIdx > setScroll + 4) setScroll = setIdx - 4;
-      } else {
-        if (evt == BTN_LEFT_PRESSED || evt == BTN_RIGHT_PRESSED) {
-          if (setIdx == 1) {
-            if (sysCfg.record_freq == 5.0) sysCfg.record_freq = 2.0;
-            else if (sysCfg.record_freq == 2.0) sysCfg.record_freq = 1.0;
-            else if (sysCfg.record_freq == 1.0) sysCfg.record_freq = 0.5;
-            else sysCfg.record_freq = 5.0;
-          }
-          if (setIdx == 2) sysCfg.draw_track = !sysCfg.draw_track;
-          if (setIdx == 3) {
-            if (sysCfg.screen_off == 30) sysCfg.screen_off = 60;
-            else if (sysCfg.screen_off == 60) sysCfg.screen_off = 300;
-            else if (sysCfg.screen_off == 300) sysCfg.screen_off = 0;
-            else sysCfg.screen_off = 30;
-          }
-          if (setIdx == 5) sysCfg.storage_track = (sysCfg.storage_track + 1) % 4;
-          if (setIdx == 6) sysCfg.en_multycol = !sysCfg.en_multycol;  // 【新增】开关抖动算法
-        }
-        if (evt == BTN_UP_PRESSED) {
-          sysCfg = tempCfg;
-          isEditing = false;
-        }
-        if (evt == BTN_DOWN_PRESSED) { isEditing = false; }
-      }
-      break;
+            break;
 
-    case PAGE_DEV:
-      if (evt == BTN_LEFT_PRESSED) currentPage = PAGE_SETTINGS;
-      break;
-    case PAGE_DEV_MENU:
-      if (evt == BTN_UP_PRESSED) {
-        devMenuIdx--;
-        if (devMenuIdx < 0) devMenuIdx = 0;
-      }
-      if (evt == BTN_DOWN_PRESSED) {
-        devMenuIdx++;
-        if (devMenuIdx > 2) devMenuIdx = 2;
-      }
-      if (evt == BTN_LEFT_PRESSED) currentPage = PAGE_SETTINGS;
-      if (evt == BTN_RIGHT_PRESSED) {
-        if (devMenuIdx == 0) currentPage = PAGE_DEV;
-        else if (devMenuIdx == 1) {
-          currentPage = PAGE_SAT_TXT;
-          satTxtScroll = 0;
-        } else if (devMenuIdx == 2) currentPage = PAGE_SAT_GUI;
-      }
-      break;
+        case PAGE_START:
+            if (evt == BTN_UP_PRESSED) { cursorIndex = 0; isCursorVisible = true; }
+            if (evt == BTN_DOWN_PRESSED) { cursorIndex = 1; isCursorVisible = true; }
+            if (evt == BTN_LEFT_PRESSED) { isCursorVisible = false; cursorIndex = 0; }
+            if (evt == BTN_RIGHT_PRESSED) {
+                if (!isCursorVisible) { isCursorVisible = true; return; }
+                if (cursorIndex == 0) { GPSCalc::startRun(); currentPage = PAGE_SPORT1; }
+                if (cursorIndex == 1) { currentPage = PAGE_SETTINGS; setIdx = 0; setScroll = 0; isEditing = false; }
+            }
+            break;
 
-    case PAGE_SAT_TXT:
-      if (evt == BTN_UP_PRESSED) {
-        satTxtScroll -= 10;
-        if (satTxtScroll < 0) satTxtScroll = 0;
-      }
-      if (evt == BTN_DOWN_PRESSED) {
-        satTxtScroll += 10;
-        // 【UI防越界】：根据当前捕捉到的卫星数量，动态限制最大滚动距离
-        int maxScroll = (GPSCalc::satCount * 10) - 20;
-        if (maxScroll < 0) maxScroll = 0;
-        if (satTxtScroll > maxScroll) satTxtScroll = maxScroll;
-      }
-      if (evt == BTN_LEFT_PRESSED) currentPage = PAGE_DEV_MENU;
-      break;
+        case PAGE_SETTINGS:
+            if (!isEditing) {
+                if (evt == BTN_UP_PRESSED) { setIdx--; if(setIdx < 0) setIdx = 0; }
+                // 【修复】：共有 12 项，最大索引是 11
+                if (evt == BTN_DOWN_PRESSED) { setIdx++; if(setIdx > 11) setIdx = 11; }
+                if (evt == BTN_LEFT_PRESSED) { currentPage = PAGE_START; } 
+                if (evt == BTN_RIGHT_PRESSED) {
+                    // 2. 【核心修复】：严格对齐新版数组的索引
+                    // 0:mode, 1:freq, 2:track, 3:scr_off, 4:pwr_btn, 5:storage, 6:multi_col
+                    if (setIdx == 7) { saveConfig(); currentPage = PAGE_START; }           // [save]
+                    else if (setIdx == 8) { HAL::sleepDevice(); }                          // [pwr_off]
+                    else if (setIdx == 9) { currentPage = PAGE_DEV_MENU; devMenuIdx = 0; } // [dev_page]
+                    else if (setIdx == 10) { Serial1.println("$PCAS04,1*18"); currentPage = PAGE_START; } // [gps_stdby]
+                    else if (setIdx == 11) { } // 空白项，不操作
+                    else { isEditing = true; tempCfg = sysCfg; }                 
+                }
+                if (setIdx < setScroll) setScroll = setIdx;
+                if (setIdx > setScroll + 4) setScroll = setIdx - 4;
+            } else {
+                if (evt == BTN_LEFT_PRESSED || evt == BTN_RIGHT_PRESSED) {
+                    if(setIdx == 1) {
+                        if (sysCfg.record_freq == 5.0) sysCfg.record_freq = 2.0;
+                        else if (sysCfg.record_freq == 2.0) sysCfg.record_freq = 1.0;
+                        else if (sysCfg.record_freq == 1.0) sysCfg.record_freq = 0.5;
+                        else sysCfg.record_freq = 5.0;
+                    }
+                    if(setIdx == 2) sysCfg.draw_track = !sysCfg.draw_track;
+                    if(setIdx == 3) { 
+                        if(sysCfg.screen_off == 30) sysCfg.screen_off = 60;
+                        else if(sysCfg.screen_off == 60) sysCfg.screen_off = 300;
+                        else if(sysCfg.screen_off == 300) sysCfg.screen_off = 0;
+                        else sysCfg.screen_off = 30;
+                    }
+                    if(setIdx == 5) sysCfg.storage_track = (sysCfg.storage_track + 1) % 4; 
+                    if(setIdx == 6) sysCfg.en_multycol = !sysCfg.en_multycol; // 【修复】：找回被误删的多颜色开关！
+                }
+                if (evt == BTN_UP_PRESSED) { sysCfg = tempCfg; isEditing = false; } 
+                if (evt == BTN_DOWN_PRESSED) { isEditing = false; } 
+            }
+            break;
 
-    case PAGE_SAT_GUI:
+        case PAGE_DEV_MENU:
+            if (evt == BTN_UP_PRESSED) { devMenuIdx--; if(devMenuIdx < 0) devMenuIdx = 0; }
+            if (evt == BTN_DOWN_PRESSED) { devMenuIdx++; if(devMenuIdx > 2) devMenuIdx = 2; }
+            if (evt == BTN_LEFT_PRESSED) currentPage = PAGE_SETTINGS;
+            if (evt == BTN_RIGHT_PRESSED) {
+                if (devMenuIdx == 0) currentPage = PAGE_DEV;
+                else if (devMenuIdx == 1) { currentPage = PAGE_SAT_TXT; satTxtScroll = 0; }
+                else if (devMenuIdx == 2) currentPage = PAGE_SAT_GUI;
+            }
+            break;
 
-    case PAGE_SPORT1:
-      if (evt == BTN_LEFT_PRESSED) {
-        GPSCalc::stopRun();
-        currentPage = PAGE_SUMMARY;
-        viewLapIdx = 0;
-      }
-      if (evt == BTN_DOWN_PRESSED) currentPage = PAGE_SPORT2;
-      break;
+        case PAGE_DEV:
+            if (evt == BTN_LEFT_PRESSED) currentPage = PAGE_DEV_MENU;
+            break;
 
-    case PAGE_SPORT2:
-      if (evt == BTN_LEFT_PRESSED) {
-        GPSCalc::stopRun();
-        currentPage = PAGE_SUMMARY;
-        viewLapIdx = 0;
-      }
-      if (evt == BTN_UP_PRESSED) currentPage = PAGE_SPORT1;
-      break;
+        case PAGE_SAT_TXT:
+            if (evt == BTN_UP_PRESSED) { satTxtScroll -= 10; if(satTxtScroll < 0) satTxtScroll = 0; }
+            if (evt == BTN_DOWN_PRESSED) { 
+                satTxtScroll += 10; 
+                // 防止一直按下键导致文字滚出屏幕
+                int maxScroll = (GPSCalc::satCount * 10) - 20;
+                if (maxScroll < 0) maxScroll = 0;
+                if (satTxtScroll > maxScroll) satTxtScroll = maxScroll;
+            }
+            if (evt == BTN_LEFT_PRESSED) currentPage = PAGE_DEV_MENU;
+            break;
 
-    case PAGE_SUMMARY:
-      if (evt == BTN_LEFT_PRESSED) currentPage = PAGE_START;
-      if (evt == BTN_UP_PRESSED) {
-        viewLapIdx--;
-        if (viewLapIdx < 0) viewLapIdx = 0;
-      }
-      if (evt == BTN_DOWN_PRESSED) {
-        viewLapIdx++;
-        if (viewLapIdx > GPSCalc::laps) viewLapIdx = GPSCalc::laps;
-      }
-      break;
-  }
+        case PAGE_SAT_GUI:
+            // 3. 【防串台保护】：除了左键退出，其他按键坚决不响应
+            if (evt == BTN_LEFT_PRESSED) currentPage = PAGE_DEV_MENU;
+            break;
+
+        case PAGE_SPORT1:
+            if (evt == BTN_LEFT_PRESSED) { GPSCalc::stopRun(); currentPage = PAGE_SUMMARY; viewLapIdx = 0; }
+            if (evt == BTN_DOWN_PRESSED) currentPage = PAGE_SPORT2;
+            break;
+
+        case PAGE_SPORT2:
+            if (evt == BTN_LEFT_PRESSED) { GPSCalc::stopRun(); currentPage = PAGE_SUMMARY; viewLapIdx = 0; }
+            if (evt == BTN_UP_PRESSED) currentPage = PAGE_SPORT1;
+            break;
+
+        case PAGE_SUMMARY:
+            if (evt == BTN_LEFT_PRESSED) currentPage = PAGE_START;
+            if (evt == BTN_UP_PRESSED) { viewLapIdx--; if(viewLapIdx < 0) viewLapIdx = 0; }
+            if (evt == BTN_DOWN_PRESSED) { viewLapIdx++; if(viewLapIdx > GPSCalc::laps) viewLapIdx = GPSCalc::laps; }
+            break;
+    }
 }
 
 void MenuManager::update() {
