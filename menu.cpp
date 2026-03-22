@@ -13,6 +13,10 @@ int MenuManager::viewLapIdx = 0;
 int MenuManager::devMenuIdx = 0;
 int MenuManager::satTxtScroll = 0;
 
+int MenuManager::devScroll = 0;
+float MenuManager::visualDevCursorY = 0;
+float MenuManager::visualDevScrollY = 0;
+
 uint32_t MenuManager::lastActiveTime = 0;
 bool MenuManager::isScreenOff = false;
 
@@ -29,130 +33,243 @@ float MenuManager::smoothLerp(float current, float target, float speed) {
 }
 
 void MenuManager::handleInput() {
-    BtnEvent evt = HAL::getEvent();
+  BtnEvent evt = HAL::getEvent();
 
-    // 1. 【核心修复】：找回息屏唤醒拦截逻辑！
-    // 必须放在 switch 之前，一旦息屏，第一下按键绝对不触发任何菜单操作
-    if (evt != BTN_NONE) {
-        if (isScreenOff) {
-            isScreenOff = false;
-            HAL::getDisplay()->setPowerSave(0); // 唤醒 OLED 硬件
-            lastActiveTime = millis();          // 重置倒计时
-            return; 
+  // 1. 【核心修复】：找回息屏唤醒拦截逻辑！
+  // 必须放在 switch 之前，一旦息屏，第一下按键绝对不触发任何菜单操作
+  if (evt != BTN_NONE) {
+    if (isScreenOff) {
+      isScreenOff = false;
+      HAL::getDisplay()->setPowerSave(0);  // 唤醒 OLED 硬件
+      lastActiveTime = millis();           // 重置倒计时
+      return;
+    }
+    lastActiveTime = millis();  // 只要有按键操作，重置息屏倒计时
+  }
+
+  if (evt == BTN_NONE) return;
+
+  switch (currentPage) {
+    case PAGE_SPLASH:
+      currentPage = PAGE_START;
+      break;
+
+    case PAGE_START:
+      if (evt == BTN_UP_PRESSED) {
+        cursorIndex = 0;
+        isCursorVisible = true;
+      }
+      if (evt == BTN_DOWN_PRESSED) {
+        cursorIndex = 1;
+        isCursorVisible = true;
+      }
+      if (evt == BTN_LEFT_PRESSED) {
+        isCursorVisible = false;
+        cursorIndex = 0;
+      }
+      if (evt == BTN_RIGHT_PRESSED) {
+        if (!isCursorVisible) {
+          isCursorVisible = true;
+          return;
         }
-        lastActiveTime = millis(); // 只要有按键操作，重置息屏倒计时
-    }
+        if (cursorIndex == 0) {
+          GPSCalc::startRun();
+          currentPage = PAGE_SPORT1;
+        }
+        if (cursorIndex == 1) {
+          currentPage = PAGE_SETTINGS;
+          setIdx = 0;
+          setScroll = 0;
+          isEditing = false;
+        }
+      }
+      break;
 
-    if (evt == BTN_NONE) return;
-
-    switch (currentPage) {
-        case PAGE_SPLASH:
+    case PAGE_SETTINGS:
+      if (!isEditing) {
+        if (evt == BTN_UP_PRESSED) {
+          setIdx--;
+          if (setIdx < 0) setIdx = 0;
+        }
+        if (evt == BTN_DOWN_PRESSED) {
+          setIdx++;
+          if (setIdx > 12) setIdx = 12;
+        }  // 【修改】最大改为 12
+        if (evt == BTN_LEFT_PRESSED) { currentPage = PAGE_START; }
+        if (evt == BTN_RIGHT_PRESSED) {
+          if (setIdx == 8) {
+            saveConfig();
             currentPage = PAGE_START;
-            break;
+          } else if (setIdx == 9) {
+            HAL::sleepDevice();
+          } else if (setIdx == 10) {
+            currentPage = PAGE_DEV_MENU;
+            devMenuIdx = 0;
+          } else if (setIdx == 11) {
+            Serial1.println("$PCAS04,1*18");
+            currentPage = PAGE_START;
+          } else if (setIdx == 12) {
+          }  // 空白项
+          else {
+            isEditing = true;
+            tempCfg = sysCfg;
+          }
+        }
+        if (setIdx < setScroll) setScroll = setIdx;
+        if (setIdx > setScroll + 4) setScroll = setIdx - 4;
+      } else {  // 编辑模式
+        if (evt == BTN_UP_PRESSED || evt == BTN_DOWN_PRESSED) {
+          // 判断是向上还是向下
+          int dir = (evt == BTN_DOWN_PRESSED) ? 1 : -1;
 
-        case PAGE_START:
-            if (evt == BTN_UP_PRESSED) { cursorIndex = 0; isCursorVisible = true; }
-            if (evt == BTN_DOWN_PRESSED) { cursorIndex = 1; isCursorVisible = true; }
-            if (evt == BTN_LEFT_PRESSED) { isCursorVisible = false; cursorIndex = 0; }
-            if (evt == BTN_RIGHT_PRESSED) {
-                if (!isCursorVisible) { isCursorVisible = true; return; }
-                if (cursorIndex == 0) { GPSCalc::startRun(); currentPage = PAGE_SPORT1; }
-                if (cursorIndex == 1) { currentPage = PAGE_SETTINGS; setIdx = 0; setScroll = 0; isEditing = false; }
-            }
-            break;
-
-        case PAGE_SETTINGS:
-            if (!isEditing) {
-                if (evt == BTN_UP_PRESSED) { setIdx--; if(setIdx < 0) setIdx = 0; }
-                // 【修复】：共有 12 项，最大索引是 11
-                if (evt == BTN_DOWN_PRESSED) { setIdx++; if(setIdx > 11) setIdx = 11; }
-                if (evt == BTN_LEFT_PRESSED) { currentPage = PAGE_START; } 
-                if (evt == BTN_RIGHT_PRESSED) {
-                    // 2. 【核心修复】：严格对齐新版数组的索引
-                    // 0:mode, 1:freq, 2:track, 3:scr_off, 4:pwr_btn, 5:storage, 6:multi_col
-                    if (setIdx == 7) { saveConfig(); currentPage = PAGE_START; }           // [save]
-                    else if (setIdx == 8) { HAL::sleepDevice(); }                          // [pwr_off]
-                    else if (setIdx == 9) { currentPage = PAGE_DEV_MENU; devMenuIdx = 0; } // [dev_page]
-                    else if (setIdx == 10) { Serial1.println("$PCAS04,1*18"); currentPage = PAGE_START; } // [gps_stdby]
-                    else if (setIdx == 11) { } // 空白项，不操作
-                    else { isEditing = true; tempCfg = sysCfg; }                 
-                }
-                if (setIdx < setScroll) setScroll = setIdx;
-                if (setIdx > setScroll + 4) setScroll = setIdx - 4;
+          if (setIdx == 1) {  // 频率切换
+            if (dir > 0) {
+              if (sysCfg.record_freq == 5.0) sysCfg.record_freq = 2.0;
+              else if (sysCfg.record_freq == 2.0) sysCfg.record_freq = 1.0;
+              else if (sysCfg.record_freq == 1.0) sysCfg.record_freq = 0.5;
+              else sysCfg.record_freq = 5.0;
             } else {
-                if (evt == BTN_LEFT_PRESSED || evt == BTN_RIGHT_PRESSED) {
-                    if(setIdx == 1) {
-                        if (sysCfg.record_freq == 5.0) sysCfg.record_freq = 2.0;
-                        else if (sysCfg.record_freq == 2.0) sysCfg.record_freq = 1.0;
-                        else if (sysCfg.record_freq == 1.0) sysCfg.record_freq = 0.5;
-                        else sysCfg.record_freq = 5.0;
-                    }
-                    if(setIdx == 2) sysCfg.draw_track = !sysCfg.draw_track;
-                    if(setIdx == 3) { 
-                        if(sysCfg.screen_off == 30) sysCfg.screen_off = 60;
-                        else if(sysCfg.screen_off == 60) sysCfg.screen_off = 300;
-                        else if(sysCfg.screen_off == 300) sysCfg.screen_off = 0;
-                        else sysCfg.screen_off = 30;
-                    }
-                    if(setIdx == 5) sysCfg.storage_track = (sysCfg.storage_track + 1) % 4; 
-                    if(setIdx == 6) sysCfg.en_multycol = !sysCfg.en_multycol; // 【修复】：找回被误删的多颜色开关！
-                }
-                if (evt == BTN_UP_PRESSED) { sysCfg = tempCfg; isEditing = false; } 
-                if (evt == BTN_DOWN_PRESSED) { isEditing = false; } 
+              if (sysCfg.record_freq == 0.5) sysCfg.record_freq = 1.0;
+              else if (sysCfg.record_freq == 1.0) sysCfg.record_freq = 2.0;
+              else if (sysCfg.record_freq == 2.0) sysCfg.record_freq = 5.0;
+              else sysCfg.record_freq = 0.5;
             }
-            break;
-
-        case PAGE_DEV_MENU:
-            if (evt == BTN_UP_PRESSED) { devMenuIdx--; if(devMenuIdx < 0) devMenuIdx = 0; }
-            if (evt == BTN_DOWN_PRESSED) { devMenuIdx++; if(devMenuIdx > 2) devMenuIdx = 2; }
-            if (evt == BTN_LEFT_PRESSED) currentPage = PAGE_SETTINGS;
-            if (evt == BTN_RIGHT_PRESSED) {
-                if (devMenuIdx == 0) currentPage = PAGE_DEV;
-                else if (devMenuIdx == 1) { currentPage = PAGE_SAT_TXT; satTxtScroll = 0; }
-                else if (devMenuIdx == 2) currentPage = PAGE_SAT_GUI;
+          }
+          if (setIdx == 2) sysCfg.draw_track = !sysCfg.draw_track;
+          if (setIdx == 3) {  // 息屏时间
+            if (dir > 0) {
+              if (sysCfg.screen_off == 30) sysCfg.screen_off = 60;
+              else if (sysCfg.screen_off == 60) sysCfg.screen_off = 300;
+              else if (sysCfg.screen_off == 300) sysCfg.screen_off = 0;
+              else sysCfg.screen_off = 30;
+            } else {
+              if (sysCfg.screen_off == 0) sysCfg.screen_off = 300;
+              else if (sysCfg.screen_off == 300) sysCfg.screen_off = 60;
+              else if (sysCfg.screen_off == 60) sysCfg.screen_off = 30;
+              else sysCfg.screen_off = 0;
             }
-            break;
-
-        case PAGE_DEV:
-            if (evt == BTN_LEFT_PRESSED) currentPage = PAGE_DEV_MENU;
-            break;
-
-        case PAGE_SAT_TXT:
-            if (evt == BTN_UP_PRESSED) { satTxtScroll -= 10; if(satTxtScroll < 0) satTxtScroll = 0; }
-            if (evt == BTN_DOWN_PRESSED) { 
-                satTxtScroll += 10; 
-                // 防止一直按下键导致文字滚出屏幕
-                int maxScroll = (GPSCalc::satCount * 10) - 20;
-                if (maxScroll < 0) maxScroll = 0;
-                if (satTxtScroll > maxScroll) satTxtScroll = maxScroll;
+          }
+          if (setIdx == 5) {
+            if (dir > 0) sysCfg.storage_track = (sysCfg.storage_track + 1) % 4;
+            else sysCfg.storage_track = (sysCfg.storage_track + 3) % 4;  // C++负数取模技巧
+          }
+          if (setIdx == 6) sysCfg.en_multycol = !sysCfg.en_multycol;
+          if (setIdx == 7) {  // 亮度切换并即时预览
+            if (dir > 0) {
+              sysCfg.contrast++;
+              if (sysCfg.contrast > 5) sysCfg.contrast = 1;
+            } else {
+              sysCfg.contrast--;
+              if (sysCfg.contrast < 1) sysCfg.contrast = 5;
             }
-            if (evt == BTN_LEFT_PRESSED) currentPage = PAGE_DEV_MENU;
-            break;
+            HAL::getDisplay()->setContrast(sysCfg.contrast * 51);
+          }
+        }
 
-        case PAGE_SAT_GUI:
-            // 3. 【防串台保护】：除了左键退出，其他按键坚决不响应
-            if (evt == BTN_LEFT_PRESSED) currentPage = PAGE_DEV_MENU;
-            break;
+        // 【逻辑更新】：左键确认，右键取消
+        if (evt == BTN_LEFT_PRESSED) {
+          isEditing = false;  // 确认更改，退出编辑
+        }
+        if (evt == BTN_RIGHT_PRESSED) {
+          sysCfg = tempCfg;                                      // 恢复旧配置
+          HAL::getDisplay()->setContrast(sysCfg.contrast * 51);  // 恢复旧亮度
+          isEditing = false;                                     // 取消更改，退出编辑
+        }
+      }
+      break;
 
-        case PAGE_SPORT1:
-            if (evt == BTN_LEFT_PRESSED) { GPSCalc::stopRun(); currentPage = PAGE_SUMMARY; viewLapIdx = 0; }
-            if (evt == BTN_DOWN_PRESSED) currentPage = PAGE_SPORT2;
-            break;
+    case PAGE_DEV_MENU:
+      if (evt == BTN_UP_PRESSED) {
+        devMenuIdx--;
+        if (devMenuIdx < 0) devMenuIdx = 0;
+      }
+      if (evt == BTN_DOWN_PRESSED) {
+        devMenuIdx++;
+        if (devMenuIdx > 4) devMenuIdx = 4;
+      }
+      if (evt == BTN_LEFT_PRESSED) currentPage = PAGE_SETTINGS;
+      if (evt == BTN_RIGHT_PRESSED) {
+        if (devMenuIdx == 0) currentPage = PAGE_DEV;
+        else if (devMenuIdx == 1) {
+          currentPage = PAGE_SAT_TXT;
+          satTxtScroll = 0;
+        } else if (devMenuIdx == 2) currentPage = PAGE_SAT_GUI;
+        else if (devMenuIdx == 3) currentPage = PAGE_DEV_STAT;
+        else if (devMenuIdx == 4) {}
+      }
+      // 【关键修复】：把 +4 改成 +2，让它提前触发滚动
+      if (devMenuIdx < devScroll) devScroll = devMenuIdx;
+      if (devMenuIdx > devScroll + 2) devScroll = devMenuIdx - 2;
+      break;
 
-        case PAGE_SPORT2:
-            if (evt == BTN_LEFT_PRESSED) { GPSCalc::stopRun(); currentPage = PAGE_SUMMARY; viewLapIdx = 0; }
-            if (evt == BTN_UP_PRESSED) currentPage = PAGE_SPORT1;
-            break;
+    case PAGE_DEV_STAT:  // 【新增】
+      if (evt == BTN_LEFT_PRESSED) currentPage = PAGE_DEV_MENU;
+      break;
 
-        case PAGE_SUMMARY:
-            if (evt == BTN_LEFT_PRESSED) currentPage = PAGE_START;
-            if (evt == BTN_UP_PRESSED) { viewLapIdx--; if(viewLapIdx < 0) viewLapIdx = 0; }
-            if (evt == BTN_DOWN_PRESSED) { viewLapIdx++; if(viewLapIdx > GPSCalc::laps) viewLapIdx = GPSCalc::laps; }
-            break;
-    }
+    case PAGE_DEV:
+      if (evt == BTN_LEFT_PRESSED) currentPage = PAGE_DEV_MENU;
+      break;
+
+    case PAGE_SAT_TXT:
+      if (evt == BTN_UP_PRESSED) {
+        satTxtScroll -= 10;
+        if (satTxtScroll < 0) satTxtScroll = 0;
+      }
+      if (evt == BTN_DOWN_PRESSED) {
+        satTxtScroll += 10;
+        // 防止一直按下键导致文字滚出屏幕
+        int maxScroll = (GPSCalc::satCount * 10) - 20;
+        if (maxScroll < 0) maxScroll = 0;
+        if (satTxtScroll > maxScroll) satTxtScroll = maxScroll;
+      }
+      if (evt == BTN_LEFT_PRESSED) currentPage = PAGE_DEV_MENU;
+      break;
+
+    case PAGE_SAT_GUI:
+      // 3. 【防串台保护】：除了左键退出，其他按键坚决不响应
+      if (evt == BTN_LEFT_PRESSED) currentPage = PAGE_DEV_MENU;
+      break;
+
+    case PAGE_SPORT1:
+      if (evt == BTN_LEFT_PRESSED) {
+        GPSCalc::stopRun();
+        currentPage = PAGE_SUMMARY;
+        viewLapIdx = 0;
+      }
+      if (evt == BTN_DOWN_PRESSED) currentPage = PAGE_SPORT2;
+      break;
+
+    case PAGE_SPORT2:
+      if (evt == BTN_LEFT_PRESSED) {
+        GPSCalc::stopRun();
+        currentPage = PAGE_SUMMARY;
+        viewLapIdx = 0;
+      }
+      if (evt == BTN_UP_PRESSED) currentPage = PAGE_SPORT1;
+      break;
+
+    case PAGE_SUMMARY:
+      if (evt == BTN_LEFT_PRESSED) currentPage = PAGE_START;
+      if (evt == BTN_UP_PRESSED) {
+        viewLapIdx--;
+        if (viewLapIdx < 0) viewLapIdx = 0;
+      }
+      if (evt == BTN_DOWN_PRESSED) {
+        viewLapIdx++;
+        if (viewLapIdx > GPSCalc::laps) viewLapIdx = GPSCalc::laps;
+      }
+      break;
+  }
 }
 
 void MenuManager::update() {
+  // 【新增】开机自动应用 NVS 保存的亮度
+  static bool contrastInit = false;
+  if (!contrastInit) {
+    HAL::getDisplay()->setContrast(sysCfg.contrast * 51);
+    contrastInit = true;
+  }
+
   if (sysCfg.screen_off > 0 && !isScreenOff) {
     if (millis() - lastActiveTime > sysCfg.screen_off * 1000UL) {
       isScreenOff = true;
@@ -172,15 +289,14 @@ void MenuManager::update() {
   else if (currentPage == PAGE_DEV) targetX = -512;
   else if (currentPage == PAGE_SAT_TXT) targetX = -640;
   else if (currentPage == PAGE_SAT_GUI) targetX = -768;
-  else if (currentPage == PAGE_SPORT1) targetX = -896;
-  else if (currentPage == PAGE_SPORT2) targetX = -1024;
-  else if (currentPage == PAGE_SUMMARY) targetX = -1152;
+  else if (currentPage == PAGE_DEV_STAT) targetX = -896;  // 【新增】
+  else if (currentPage == PAGE_SPORT1) targetX = -1024;
+  else if (currentPage == PAGE_SPORT2) targetX = -1152;
+  else if (currentPage == PAGE_SUMMARY) targetX = -1280;
 
   currentPageX = smoothLerp(currentPageX, targetX, 0.2f);
   int ox = (int)currentPageX;
 
-  // 【核心性能优化：视口裁剪】
-  // 只有页面进入了屏幕的横向显示范围 (-128 到 128)，才执行繁重的绘制函数！
   if (ox > -128 && ox < 128) drawSplash(ox);
   if (ox + 128 > -128 && ox + 128 < 128) drawStartMenu(ox + 128);
   if (ox + 256 > -128 && ox + 256 < 128) drawSettings(ox + 256);
@@ -188,9 +304,10 @@ void MenuManager::update() {
   if (ox + 512 > -128 && ox + 512 < 128) drawDevPage(ox + 512);
   if (ox + 640 > -128 && ox + 640 < 128) drawSatTxt(ox + 640);
   if (ox + 768 > -128 && ox + 768 < 128) drawSatGui(ox + 768);
-  if (ox + 896 > -128 && ox + 896 < 128) drawSport1(ox + 896);
-  if (ox + 1024 > -128 && ox + 1024 < 128) drawSport2(ox + 1024);
-  if (ox + 1152 > -128 && ox + 1152 < 128) drawSummary(ox + 1152);
+  if (ox + 896 > -128 && ox + 896 < 128) drawDevStat(ox + 896);  // 【新增】
+  if (ox + 1024 > -128 && ox + 1024 < 128) drawSport1(ox + 1024);
+  if (ox + 1152 > -128 && ox + 1152 < 128) drawSport2(ox + 1152);
+  if (ox + 1280 > -128 && ox + 1280 < 128) drawSummary(ox + 1280);
 
   u8g2->sendBuffer();
 }
@@ -255,20 +372,21 @@ void MenuManager::drawStartMenu(int ox) {
 
 void MenuManager::drawSettings(int ox) {
   auto u8g2 = HAL::getDisplay();
-  // 数组增加到 12 项，加入了 multi_col
-  const char* titles[] = { "mode:", "freq:", "track:", "scr_off:", "pwr_btn:", "storage:", "multi_col:", "[save]", "[pwr_off]", "[dev_page]", "[gps_stdby]", "" };
-  char vFreq[10], vScr[10], vStore[10];
+  u8g2->setFont(u8g2_font_6x10_tf);
+
+  const char* titles[] = { "mode:", "freq:", "track:", "scr_off:", "pwr_btn:", "storage:", "multi_col:", "contrast:", "[save]", "[pwr_off]", "[dev_page]", "[gps_stdby]", "" };
+  char vFreq[10], vScr[10], vStore[10], vCont[10];
   sprintf(vFreq, sysCfg.record_freq == 0.5 ? "0.5Hz" : "%dHz", (int)sysCfg.record_freq);
   sprintf(vScr, sysCfg.screen_off == 0 ? "never" : "%ds", sysCfg.screen_off);
   sprintf(vStore, sysCfg.storage_track == 0 ? "disable" : "%d", sysCfg.storage_track);
+  sprintf(vCont, "Lv.%d", sysCfg.contrast);  // 【新增】亮度级别
 
-  // 对应加入 multi_col 的值
-  const char* vals[] = { "running", vFreq, sysCfg.draw_track ? "yes" : "no", vScr, "hold_3s", vStore, sysCfg.en_multycol ? "yes" : "no", "", "", "", "", "" };
+  const char* vals[] = { "running", vFreq, sysCfg.draw_track ? "yes" : "no", vScr, "hold_3s", vStore, sysCfg.en_multycol ? "yes" : "no", vCont, "", "", "", "", "" };
 
   visualSetScrollY = smoothLerp(visualSetScrollY, setScroll * 12, 0.2f);
   visualSetCursorY = smoothLerp(visualSetCursorY, setIdx * 12, 0.3f);
 
-  for (int i = 0; i < 12; i++) {  // 循环改为 12
+  for (int i = 0; i < 13; i++) {  // 循环改为 13
     float itemY = 20 + i * 12 - visualSetScrollY;
     if (itemY < 5 || itemY > 70) continue;
     u8g2->drawStr(ox + 10, (int)itemY, titles[i]);
@@ -276,7 +394,7 @@ void MenuManager::drawSettings(int ox) {
   }
 
   float curY = 20 + visualSetCursorY - visualSetScrollY;
-  if (setIdx != 11) u8g2->drawStr(ox + 0, (int)curY, isEditing ? "*" : ">");  // 第12项(索引11)是空白项
+  if (setIdx != 12) u8g2->drawStr(ox + 0, (int)curY, isEditing ? "*" : ">");
 }
 
 void MenuManager::drawDevPage(int ox) {
@@ -497,108 +615,156 @@ void MenuManager::drawDevMenu(int ox) {
   auto u8g2 = HAL::getDisplay();
   u8g2->setFont(u8g2_font_6x10_tf);
   u8g2->drawStr(ox + 2, 10, "--- DEV MENU ---");
-  const char* items[] = { "1. Basic GPS Info", "2. [sat_view_text]", "3. [sat_view_gui]" };
-  for (int i = 0; i < 3; i++) {
-    if (devMenuIdx == i) u8g2->drawStr(ox + 2, 25 + i * 15, ">");
-    u8g2->drawStr(ox + 12, 25 + i * 15, items[i]);
+
+  // 【新增】包含 dev_stat 和结尾空白行
+  const char* items[] = { "1. Basic Info", "2.[sat_view_txt]", "3. [sat_view_gui]", "4. [dev_stat]", "" };
+
+  visualDevScrollY = smoothLerp(visualDevScrollY, devScroll * 15, 0.2f);
+  visualDevCursorY = smoothLerp(visualDevCursorY, devMenuIdx * 15, 0.3f);
+
+  for (int i = 0; i < 5; i++) {
+    float itemY = 25 + i * 15 - visualDevScrollY;
+    if (itemY < 10 || itemY > 70) continue;
+    u8g2->drawStr(ox + 12, (int)itemY, items[i]);
   }
+
+  float curY = 25 + visualDevCursorY - visualDevScrollY;
+  if (devMenuIdx != 4) u8g2->drawStr(ox + 2, (int)curY, ">");
 }
 
 // 1. 卫星文本信息页
 void MenuManager::drawSatTxt(int ox) {
-    auto u8g2 = HAL::getDisplay();
-    u8g2->setFont(u8g2_font_5x8_tf);
-    int y = 20 - satTxtScroll; 
-    const char* sName[] = {"GPS", "BDS", "GLO", "SBS"};
-    
-    for (int s = 0; s < 4; s++) {
-        if (GPSCalc::sysInView[s] == 0) continue; 
+  auto u8g2 = HAL::getDisplay();
+  u8g2->setFont(u8g2_font_5x8_tf);
+  int y = 20 - satTxtScroll;
+  const char* sName[] = { "GPS", "BDS", "GLO", "SBS" };
+
+  for (int s = 0; s < 4; s++) {
+    if (GPSCalc::sysInView[s] == 0) continue;
+    if (y > 10 && y < 70) {
+      u8g2->setCursor(ox + 2, y);
+      u8g2->print("[");
+      u8g2->print(sName[s]);
+      u8g2->print("*");
+      u8g2->print(GPSCalc::sysTracked[s]);
+      u8g2->print("/");
+      u8g2->print(GPSCalc::sysInView[s]);
+      u8g2->print("]");
+    }
+    y += 10;
+    for (int i = 0; i < GPSCalc::satCount; i++) {
+      if (GPSCalc::sats[i].sys == s) {
         if (y > 10 && y < 70) {
-            u8g2->setCursor(ox + 2, y);
-            u8g2->print("["); u8g2->print(sName[s]); u8g2->print("*");
-            u8g2->print(GPSCalc::sysTracked[s]); u8g2->print("/");
-            u8g2->print(GPSCalc::sysInView[s]); u8g2->print("]");
+          char buf[32];
+          sprintf(buf, " %02d   %02d   %02d   %03d", GPSCalc::sats[i].prn, GPSCalc::sats[i].snr, GPSCalc::sats[i].ele, GPSCalc::sats[i].azi);
+          u8g2->drawStr(ox + 2, y, buf);
         }
         y += 10;
-        for (int i = 0; i < GPSCalc::satCount; i++) {
-            if (GPSCalc::sats[i].sys == s) {
-                if (y > 10 && y < 70) {
-                    char buf[32];
-                    sprintf(buf, " %02d   %02d   %02d   %03d", GPSCalc::sats[i].prn, GPSCalc::sats[i].snr, GPSCalc::sats[i].ele, GPSCalc::sats[i].azi);
-                    u8g2->drawStr(ox + 2, y, buf);
-                }
-                y += 10;
-            }
-        }
+      }
     }
-    u8g2->setDrawColor(0); u8g2->drawBox(ox, 0, 128, 12); u8g2->setDrawColor(1);
-    u8g2->drawStr(ox + 2, 9, " PRN SNR ELE AZI");
-    u8g2->drawLine(ox, 11, ox+128, 11);
-} // <--- 这里一定要闭合这个函数！
+  }
+  u8g2->setDrawColor(0);
+  u8g2->drawBox(ox, 0, 128, 12);
+  // 替换 drawSatTxt 最后三行
+  u8g2->setDrawColor(0);
+  u8g2->drawBox(ox, 0, 126, 12);
+  u8g2->setDrawColor(1);
+  u8g2->drawStr(ox + 2, 9, " PRN SNR ELE AZI");
+  u8g2->drawLine(ox, 11, ox + 125, 11);  // 安全缩短，杜绝溢出
+}
 
 // 2. 卫星图形化GUI页
 void MenuManager::drawSatGui(int ox) {
-    auto u8g2 = HAL::getDisplay();
-    u8g2->setFont(u8g2_font_4x6_tf);
-    const char* sName[] = { "GPS", "BDS", "GLO", "SBS" };
+  auto u8g2 = HAL::getDisplay();
+  u8g2->setFont(u8g2_font_4x6_tf);
+  const char* sName[] = { "GPS", "BDS", "GLO", "SBS" };
 
-    int cx = ox + 30, cy = 35, r = 22;
-    int total = 0;
-    for (int i = 0; i < 4; i++) total += GPSCalc::sysTracked[i];
-    u8g2->drawCircle(cx, cy, r);
+  int cx = ox + 30, cy = 35, r = 22;
+  int total = 0;
+  for (int i = 0; i < 4; i++) total += GPSCalc::sysTracked[i];
+  u8g2->drawCircle(cx, cy, r);
 
-    if (total > 0) {
-        float angle = -PI / 2;
-        for (int i = 0; i < 4; i++) {
-            if (GPSCalc::sysTracked[i] == 0) continue;
-            float sweep = (GPSCalc::sysTracked[i] / (float)total) * 2 * PI;
+  if (total > 0) {
+    float angle = -PI / 2;
+    for (int i = 0; i < 4; i++) {
+      if (GPSCalc::sysTracked[i] == 0) continue;
+      float sweep = (GPSCalc::sysTracked[i] / (float)total) * 2 * PI;
 
-        // 【优化】：放弃基于半径的步长，改为基于固定角度的步长
-        if (sysCfg.en_multycol) {
-            float angleStep = 0;
-            // 密度越低，线条越少，CPU 负担越小，运行越流畅！
-            if (i == 0)      angleStep = PI / 48.0f; // GPS:  (极密)
-            else if (i == 1) angleStep = PI / 16.0f;  // BDS:  (中密)
-            else if (i == 2) angleStep = PI / 9.0f;  // GLO: (稀疏)
-            // SBS(i==3) 保持 0，全白
+      // 【优化】：放弃基于半径的步长，改为基于固定角度的步长
+      if (sysCfg.en_multycol) {
+        float angleStep = 0;
+        // 密度越低，线条越少，CPU 负担越小，运行越流畅！
+        if (i == 0) angleStep = PI / 64.0f;       // GPS:  (极密)
+        else if (i == 1) angleStep = PI / 16.0f;  // BDS:  (中密)
+        else if (i == 2) angleStep = PI / 9.0f;   // GLO: (稀疏)
+        // SBS(i==3) 保持 0，全白
 
-            if (angleStep > 0) {
-                // 仅绘制从中心向边缘的线段
-                for (float a = angle; a < angle + sweep; a += angleStep) {
-                    // 【关键优化】：为了性能，只画圆周半径的 80%
-                    // 不必从中心画到边缘，画一条短线效果是一样的
-                    u8g2->drawLine(cx + (r*0.2f)*cos(a), cy + (r*0.2f)*sin(a), 
-                                   cx + r*cos(a), cy + r*sin(a));
-                }
-            }
+        if (angleStep > 0) {
+          // 仅绘制从中心向边缘的线段
+          for (float a = angle; a < angle + sweep; a += angleStep) {
+            // 【关键优化】：为了性能，只画圆周半径的 80%
+            // 不必从中心画到边缘，画一条短线效果是一样的
+            u8g2->drawLine(cx + (r * 0.2f) * cos(a), cy + (r * 0.2f) * sin(a),
+                           cx + r * cos(a), cy + r * sin(a));
+          }
         }
-            u8g2->drawLine(cx, cy, cx + r * cos(angle), cy + r * sin(angle));
-            int lx = cx + (r + 8) * cos(angle + sweep / 2) - 6;
-            int ly = cy + (r + 8) * sin(angle + sweep / 2) + 2;
-            u8g2->setCursor(lx, ly);
-            u8g2->print(sName[i]);
-            angle += sweep;
-        }
-    } else {
-        u8g2->drawStr(cx - 10, cy + 2, "NO SAT");
+      }
+      u8g2->drawLine(cx, cy, cx + r * cos(angle), cy + r * sin(angle));
+      int lx = cx + (r + 8) * cos(angle + sweep / 2) - 6;
+      int ly = cy + (r + 8) * sin(angle + sweep / 2) + 2;
+      u8g2->setCursor(lx, ly);
+      u8g2->print(sName[i]);
+      angle += sweep;
     }
+  } else {
+    u8g2->drawStr(cx - 10, cy + 2, "NO SAT");
+  }
 
-    u8g2->drawStr(ox + 65, 8, "TOP 5 SATS:");
-    int top[40];
-    for (int i = 0; i < GPSCalc::satCount; i++) top[i] = i;
-    for (int i = 0; i < GPSCalc::satCount - 1; i++) {
-        for (int j = i + 1; j < GPSCalc::satCount; j++) {
-            if (GPSCalc::sats[top[j]].snr > GPSCalc::sats[top[i]].snr) {
-                int tmp = top[i]; top[i] = top[j]; top[j] = tmp;
-            }
-        }
+  u8g2->drawStr(ox + 65, 8, "TOP 5 SATS:");
+  int top[40];
+  for (int i = 0; i < GPSCalc::satCount; i++) top[i] = i;
+  for (int i = 0; i < GPSCalc::satCount - 1; i++) {
+    for (int j = i + 1; j < GPSCalc::satCount; j++) {
+      if (GPSCalc::sats[top[j]].snr > GPSCalc::sats[top[i]].snr) {
+        int tmp = top[i];
+        top[i] = top[j];
+        top[j] = tmp;
+      }
     }
-    for (int i = 0; i < 5 && i < GPSCalc::satCount; i++) {
-        int idx = top[i];
-        if (GPSCalc::sats[idx].snr == 0) break;
-        u8g2->setCursor(ox + 65, 18 + i * 9);
-        u8g2->print("["); u8g2->print(sName[GPSCalc::sats[idx].sys]); u8g2->print("] ");
-        u8g2->print(GPSCalc::sats[idx].prn); u8g2->print(" S:");
-        u8g2->print(GPSCalc::sats[idx].snr);
-    }
+  }
+  for (int i = 0; i < 5 && i < GPSCalc::satCount; i++) {
+    int idx = top[i];
+    if (GPSCalc::sats[idx].snr == 0) break;
+    u8g2->setCursor(ox + 65, 18 + i * 9);
+    u8g2->print("[");
+    u8g2->print(sName[GPSCalc::sats[idx].sys]);
+    u8g2->print("] ");
+    u8g2->print(GPSCalc::sats[idx].prn);
+    u8g2->print(" S:");
+    u8g2->print(GPSCalc::sats[idx].snr);
+  }
+}
+
+
+void MenuManager::drawDevStat(int ox) {
+  auto u8g2 = HAL::getDisplay();
+  u8g2->setFont(u8g2_font_5x8_tf);
+
+  u8g2->setCursor(ox + 2, 12);
+  u8g2->print("--- DEV STAT ---");
+
+  u8g2->setCursor(ox + 2, 28);
+  u8g2->print("Heap: ");
+  u8g2->print(ESP.getFreeHeap() / 1024);
+  u8g2->print(" KB");
+
+  u8g2->setCursor(ox + 2, 40);
+  u8g2->print("Min Heap: ");
+  u8g2->print(ESP.getMinFreeHeap() / 1024);
+  u8g2->print(" KB");
+
+  u8g2->setCursor(ox + 2, 52);
+  u8g2->print("GPS Rdy: ");
+  if (GPSCalc::isGpsReady()) u8g2->print("YES (UART OK)");
+  else u8g2->print("NO (NO DATA)");
 }

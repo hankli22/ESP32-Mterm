@@ -4,12 +4,13 @@
 #include <Arduino.h>
 
 struct SystemConfig {
-    float record_freq = 5.0; // 5.0, 2.0, 1.0, 0.5
-    bool draw_track = true;  // true(yes), false(no)
-    int screen_off = 30;     // 30, 60(1m), 300(5m), 0(never)
-    int pwr_off_btn = 0;     // 0: hold_3s, 1: w,a,s,d (UI展示用)
-    int storage_track = 0;   // 0: disable, 1, 2, 4
-    bool en_multycol = true; // 【新增】是否启用多颜色(灰阶抖动)饼图
+  float record_freq = 5.0;
+  bool draw_track = true;
+  int screen_off = 30;
+  int pwr_off_btn = 0;
+  int storage_track = 0;
+  bool en_multycol = true;
+  int contrast = 5;  // 【新增】亮度/对比度 (1~5档)
 };
 
 extern SystemConfig sysCfg;

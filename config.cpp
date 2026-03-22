@@ -5,21 +5,23 @@ SystemConfig sysCfg;
 Preferences prefs;
 
 void loadConfig() {
-    prefs.begin("runner", true);
-    sysCfg.record_freq = prefs.getFloat("freq", 5.0);
-    sysCfg.draw_track = prefs.getBool("track", true);
-    sysCfg.screen_off = prefs.getInt("soff", 30);
-    sysCfg.storage_track = prefs.getInt("stor", 0);
-    sysCfg.en_multycol = prefs.getBool("mcol", true);
-    prefs.end();
+  prefs.begin("runner", true);
+  sysCfg.record_freq = prefs.getFloat("freq", 5.0);
+  sysCfg.draw_track = prefs.getBool("track", true);
+  sysCfg.screen_off = prefs.getInt("soff", 30);
+  sysCfg.storage_track = prefs.getInt("stor", 0);
+  sysCfg.en_multycol = prefs.getBool("mcol", true);
+  sysCfg.contrast = prefs.getInt("cont", 5);
+  prefs.end();
 }
 
 void saveConfig() {
-    prefs.begin("runner", false);
-    prefs.putFloat("freq", sysCfg.record_freq);
-    prefs.putBool("track", sysCfg.draw_track);
-    prefs.putInt("soff", sysCfg.screen_off);
-    prefs.putInt("stor", sysCfg.storage_track);
-    prefs.putBool("mcol", sysCfg.en_multycol);
-    prefs.end();
+  prefs.begin("runner", false);
+  prefs.putFloat("freq", sysCfg.record_freq);
+  prefs.putBool("track", sysCfg.draw_track);
+  prefs.putInt("soff", sysCfg.screen_off);
+  prefs.putInt("stor", sysCfg.storage_track);
+  prefs.putBool("mcol", sysCfg.en_multycol);
+  prefs.putInt("cont", sysCfg.contrast);
+  prefs.end();
 }

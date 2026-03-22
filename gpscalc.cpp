@@ -72,23 +72,26 @@ static float calcDist(double lat1, double lng1, double lat2, double lng2) {
 }
 
 String GPSCalc::getDateTime() {
-    if (!gps.time.isValid() || gps.date.year() < 2020) {
-        if (gps.time.isValid()) {
-            char tBuf[32]; // 【修复】：扩大缓冲区到32
-            int h = (gps.time.hour() + 8) % 24;
-            sprintf(tBuf, "TIME: %02d:%02d:%02d", h, (int)gps.time.minute(), (int)gps.time.second());
-            return String(tBuf);
-        }
-        return "WAITING SATELLITES";
+  if (!gps.time.isValid() || gps.date.year() < 2020) {
+    if (gps.time.isValid()) {
+      char tBuf[32];  // 【修复】：扩大缓冲区到32
+      int h = (gps.time.hour() + 8) % 24;
+      sprintf(tBuf, "TIME: %02d:%02d:%02d", h, (int)gps.time.minute(), (int)gps.time.second());
+      return String(tBuf);
     }
-    char timeBuf[32]; // 【修复】：扩大缓冲区到32防溢出警告
-    int localHour = gps.time.hour() + 8;
-    int localDay = gps.date.day();
-    if (localHour >= 24) { localHour -= 24; localDay += 1; }
-    sprintf(timeBuf, "%02d/%02d/%02d %02d:%02d:%02d", 
-            (int)(gps.date.year() % 100), (int)gps.date.month(), (int)localDay, 
-            (int)localHour, (int)gps.time.minute(), (int)gps.time.second());
-    return String(timeBuf);
+    return "WAITING SATELLITES";
+  }
+  char timeBuf[32];  // 【修复】：扩大缓冲区到32防溢出警告
+  int localHour = gps.time.hour() + 8;
+  int localDay = gps.date.day();
+  if (localHour >= 24) {
+    localHour -= 24;
+    localDay += 1;
+  }
+  sprintf(timeBuf, "%02d/%02d/%02d %02d:%02d:%02d",
+          (int)(gps.date.year() % 100), (int)gps.date.month(), (int)localDay,
+          (int)localHour, (int)gps.time.minute(), (int)gps.time.second());
+  return String(timeBuf);
 }
 
 
@@ -262,4 +265,9 @@ void GPSCalc::cleanupSats() {
   for (int i = 0; i < satCount; i++) {
     if (sats[i].snr > 15) sysTracked[sats[i].sys]++;  // SNR > 15 视为已锁定/Tracked
   }
+}
+
+
+bool GPSCalc::isGpsReady() {
+  return gps.charsProcessed() > 0;  // 只要解析到底层数据就说明通信正常
 }

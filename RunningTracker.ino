@@ -3,36 +3,38 @@
 #include "gpscalc.h"
 #include "menu.h"
 #include "config.h"
+#pragma GCC optimize("O2")
+
 
 TaskHandle_t uiTaskHandle;
 TaskHandle_t logicTaskHandle;
 
 void uiTask(void* pvParameters) {
-    for(;;) {
-        HAL::updateButtons();
-        MenuManager::handleInput();
-        MenuManager::update();
-        vTaskDelay(pdMS_TO_TICKS(33)); 
-    }
+  for (;;) {
+    HAL::updateButtons();
+    MenuManager::handleInput();
+    MenuManager::update();
+    vTaskDelay(pdMS_TO_TICKS(16));
+  }
 }
 
 void logicTask(void* pvParameters) {
-    for(;;) {
-        GPSCalc::process();
-        vTaskDelay(pdMS_TO_TICKS(100)); 
-    }
+  for (;;) {
+    GPSCalc::process();
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
 }
 
 void setup() {
-    Serial.begin(115200);
-    loadConfig(); // 从 NVS 优先读取用户配置
-    HAL::init();
-    GPSCalc::init();
+  Serial.begin(115200);
+  loadConfig();  // 从 NVS 优先读取用户配置
+  HAL::init();
+  GPSCalc::init();
 
-    xTaskCreatePinnedToCore(uiTask, "UI", 4096, NULL, 1, &uiTaskHandle, 0);
-    xTaskCreatePinnedToCore(logicTask, "Logic", 4096, NULL, 2, &logicTaskHandle, 0);
+  xTaskCreatePinnedToCore(uiTask, "UI", 4096, NULL, 1, &uiTaskHandle, 0);
+  xTaskCreatePinnedToCore(logicTask, "Logic", 4096, NULL, 2, &logicTaskHandle, 0);
 }
 
 void loop() {
-    vTaskDelay(pdMS_TO_TICKS(1000)); 
+  vTaskDelay(pdMS_TO_TICKS(1000));
 }
