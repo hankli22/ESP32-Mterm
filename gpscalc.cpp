@@ -37,6 +37,11 @@ int GPSCalc::satCount = 0;
 int GPSCalc::sysTracked[4] = { 0 };
 int GPSCalc::sysInView[4] = { 0 };
 
+double GPSCalc::rawLat = 0;
+double GPSCalc::rawLng = 0;
+float GPSCalc::maxSpeed = 0;
+int GPSCalc::calories = 0;
+
 static TinyGPSPlus gps;
 static TinyGPSCustom satsInViewCustom(gps, "GPGSV", 3);
 
@@ -54,6 +59,8 @@ void GPSCalc::startRun() {
   trackPointsCount = 0;
   homeLat = 0;
   durationSec = 0;
+  maxSpeed = 0;
+  calories = 0;
   runStartTime = millis();
   lastLapTime = millis();
   for (int i = 0; i < PACE_WINDOW_SIZE; i++) paceBuffer[i] = 0;
@@ -96,54 +103,65 @@ String GPSCalc::getDateTime() {
 
 
 void GPSCalc::process() {
+  // 1. 底层 NMEA 拦截器：用于解析 GSV 报文获取详细卫星信息
   static char nmeaBuf[85];
   static int nmeaPos = 0;
 
-  // 底层 NMEA 拦截与解析引擎
   while (Serial1.available() > 0) {
     char c = Serial1.read();
-    gps.encode(c);  // 原样喂给 TinyGPS++
+    gps.encode(c);  // 同步喂给 TinyGPS++ 库进行标准解析
 
-    // 拦截并存入 Buffer
+    // 拦截 NMEA 语句
     if (c == '$') {
       nmeaPos = 0;
       nmeaBuf[nmeaPos++] = c;
     } else if (c == '\n' || c == '\r') {
       nmeaBuf[nmeaPos] = 0;
-      if (nmeaPos > 10) parseGSV(nmeaBuf);  // 抓取卫星详细数据
+      if (nmeaPos > 10) parseGSV(nmeaBuf);  // 调用 GSV 解析函数
       nmeaPos = 0;
     } else if (nmeaPos < 84) {
       nmeaBuf[nmeaPos++] = c;
     }
   }
-  cleanupSats();  // 定期清理丢失的卫星
 
+  // 定期清理丢失信号的卫星，更新 sysTracked/sysInView 数组
+  cleanupSats();
+
+  // 2. 更新基础状态数据（无论是否点击 Start 都会更新，供 Dev 页面查看）
   satellites = gps.satellites.value();
   if (satsInViewCustom.isUpdated() && satsInViewCustom.isValid()) {
     satsInView = atoi(satsInViewCustom.value());
   }
 
+  // 更新精准度百分比 (基于 HDOP)
   double h = gps.hdop.hdop();
   if (h > 0) {
     int acc = 100 - (int)((h - 1.0) * 15);
     accuracyPct = constrain(acc, 0, 100);
   } else accuracyPct = 0;
 
-  if (!gps.location.isValid() || gps.location.age() > 2000) return;
+  // 核心修复：更新原始坐标 (rawLat/rawLng)，无视过滤条件供 Dev 页面调试
+  if (gps.location.isValid()) {
+    rawLat = gps.location.lat();
+    rawLng = gps.location.lng();
+    altitude = gps.altitude.meters();
+    course = gps.course.deg();
+    currentSpeed = gps.speed.kmph();
+  }
 
-  double lat = gps.location.lat();
-  double lng = gps.location.lng();
-  currentSpeed = gps.speed.kmph();
-  altitude = gps.altitude.meters();
-  course = gps.course.deg();
+  // 如果没有开始运动，或者定位已失效超过 2 秒，则停止后续计算
+  if (!isRunning || !gps.location.isValid() || gps.location.age() > 2000) return;
 
-  if (!isRunning) return;
   uint32_t now = millis();
   durationSec = (now - runStartTime) / 1000;
+  double lat = gps.location.lat();
+  double lng = gps.location.lng();
 
+  // 3. 10秒滑动窗口配速计算 (每秒执行一次)
   if (now - lastPaceUpdate >= 1000) {
     float distThisSec = totalDistance - lastDistForPace;
     lastDistForPace = totalDistance;
+
     paceBuffer[paceBufIdx] = distThisSec;
     paceBufIdx = (paceBufIdx + 1) % PACE_WINDOW_SIZE;
     lastPaceUpdate = now;
@@ -151,9 +169,9 @@ void GPSCalc::process() {
     float distInWindow = 0;
     for (int i = 0; i < PACE_WINDOW_SIZE; i++) distInWindow += paceBuffer[i];
 
-    if (distInWindow > 0.5) {
+    if (distInWindow > 0.5f) {  // 窗口内移动超过 0.5 米才计算配速
       float speedMps = distInWindow / (float)PACE_WINDOW_SIZE;
-      slidingPace = 16.6667f / speedMps;
+      slidingPace = 16.6667f / speedMps;  // 换算为 min/km
       paceMin = (int)slidingPace;
       paceSec = (int)((slidingPace - paceMin) * 60);
     } else {
@@ -161,46 +179,63 @@ void GPSCalc::process() {
       paceMin = 0;
       paceSec = 0;
     }
+
+    // 运动分析：更新最大速度
+    if (currentSpeed > maxSpeed) maxSpeed = currentSpeed;
+    // 运动分析：简易卡路里 (假设 60kg 体重)
+    calories = (int)((totalDistance / 1000.0f) * 60.0f * 1.036f);
   }
 
+  // 4. 起点锚定 (Home Point 初始化)
   if (homeLat == 0) {
+    // 只有信号质量达标才设置起点，确保计圈精准
     if (satellites > 4 && gps.hdop.hdop() < 2.5) {
       homeLat = lat;
       homeLng = lng;
       lastLat = lat;
       lastLng = lng;
       lastLapTime = now;
+      if (laps < MAX_LAPS) lapHistory[laps].trackStartIdx = trackPointsCount;
     }
     return;
   }
 
+  // 5. 核心：锚点法计算距离 (解决慢走被吞、原地漂移问题)
   float d = calcDist(lat, lng, lastLat, lastLng);
-  if (d >= 2.0 && d < 30.0) {
+  if (d >= 2.0f && d < 35.0f) {  // 真实移动超过 2 米且小于 35 米(防跳点)
     totalDistance += d;
-    lastLat = lat;
+    lastLat = lat;  // 更新锚点
     lastLng = lng;
+
+    // 记录轨迹点 (约每 2 秒存一个点，或每移动一段距离存一个点)
     if (now - lastTrackSaveTime > 2000 && trackPointsCount < MAX_TRACK_POINTS) {
-      trackX[trackPointsCount] = (float)((lng - homeLng) * 111320.0 * cos(homeLat * 0.01745));
+      // 投影计算相对坐标
+      trackX[trackPointsCount] = (float)((lng - homeLng) * 111320.0 * cos(homeLat * 0.017453));
       trackY[trackPointsCount] = (float)((lat - homeLat) * 111320.0);
       trackPointsCount++;
       lastTrackSaveTime = now;
     }
   }
 
-
-  // --- 250m 智能分圈 ---
+  // 6. 250m 智能分圈逻辑
   float distToHome = calcDist(lat, lng, homeLat, homeLng);
-  if (distToHome < 15.0 && totalDistance > (laps * 250 + 200)) {
-    // 【防越界保护】：严格限制最大记录圈数，防止内存溢出
+  // 判断条件：回到起点 15 米内，且本圈已经跑了至少 200 米
+  if (distToHome < 15.0f && totalDistance > (laps * 250.0f + 200.0f)) {
     if (laps < MAX_LAPS) {
       lapHistory[laps].timeSec = (now - lastLapTime) / 1000;
-      lapHistory[laps].pace = lapHistory[laps].timeSec / 0.25f / 60.0f;
-      lapHistory[laps].trackEndIdx = trackPointsCount > 0 ? trackPointsCount - 1 : 0;
+      // 计算本圈平均配速
+      if (lapHistory[laps].timeSec > 0) {
+        lapHistory[laps].pace = (lapHistory[laps].timeSec / 0.25f) / 60.0f;
+      }
+      lapHistory[laps].trackEndIdx = (trackPointsCount > 0) ? trackPointsCount - 1 : 0;
+
       laps++;
-      // 预设下一圈起点
-      if (laps < MAX_LAPS) lapHistory[laps].trackStartIdx = trackPointsCount;
+      // 设置下一圈的轨迹起始索引
+      if (laps < MAX_LAPS) {
+        lapHistory[laps].trackStartIdx = trackPointsCount;
+      }
     }
-    lastLapTime = now;  // 无论是否记录，都重置时间
+    lastLapTime = now;  // 重置本圈计时器
   }
 }
 

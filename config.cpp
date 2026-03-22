@@ -12,6 +12,7 @@ void loadConfig() {
   sysCfg.storage_track = prefs.getInt("stor", 0);
   sysCfg.en_multycol = prefs.getBool("mcol", true);
   sysCfg.contrast = prefs.getInt("cont", 5);
+  sysCfg.auto_sleep = prefs.getBool("aslp", false);
   prefs.end();
 }
 
@@ -23,5 +24,6 @@ void saveConfig() {
   prefs.putInt("stor", sysCfg.storage_track);
   prefs.putBool("mcol", sysCfg.en_multycol);
   prefs.putInt("cont", sysCfg.contrast);
+  prefs.putBool("aslp", sysCfg.auto_sleep);
   prefs.end();
 }

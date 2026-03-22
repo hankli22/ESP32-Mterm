@@ -11,6 +11,7 @@ struct SystemConfig {
   int storage_track = 0;
   bool en_multycol = true;
   int contrast = 5;  // 【新增】亮度/对比度 (1~5档)
+  bool auto_sleep = false; // 【新增】跑完步退出时是否自动关机
 };
 
 extern SystemConfig sysCfg;

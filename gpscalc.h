@@ -62,6 +62,10 @@ public:
 
   static bool isGpsReady();  // 【新增】检查GPS通信状态
 
+  // --- 新增：原始坐标与运动分析数据 ---
+  static double rawLat, rawLng;  // 无视任何过滤条件，只要拿到就更新的真实坐标
+  static float maxSpeed;         // 最大速度
+  static int calories;           // 卡路里消耗 (千卡)
 private:
   static void parseGSV(const char* nmea);
   static void cleanupSats();

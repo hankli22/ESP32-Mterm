@@ -5,6 +5,8 @@ U8G2_SSD1306_128X64_NONAME_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/U8X8_PIN_NONE, /* d
 
 BtnEvent HAL::lastEvent = BTN_NONE;
 bool lastBtnState[4] = { true, true, true, true };
+// 在 hal.cpp 的全局变量区域，加入连发控制变量
+static uint32_t btnNextRepeat[2] = {0, 0}; // 仅记录 UP(0) 和 DOWN(1) 的连发时间
 
 void HAL::init() {
   pinMode(BTN_UP, INPUT_PULLUP);
@@ -47,19 +49,39 @@ int HAL::getBatteryPercent() {
   return pct;
 }
 
+
+
 void HAL::updateButtons() {
-  bool current[4] = {
-    (digitalRead(BTN_UP) == HIGH),
-    (digitalRead(BTN_DOWN) == HIGH),
-    (digitalRead(BTN_LEFT) == HIGH),
-    (digitalRead(BTN_RIGHT) == HIGH)
-  };
-  lastEvent = BTN_NONE;
-  if (lastBtnState[0] && !current[0]) lastEvent = BTN_UP_PRESSED;
-  if (lastBtnState[1] && !current[1]) lastEvent = BTN_DOWN_PRESSED;
-  if (lastBtnState[2] && !current[2]) lastEvent = BTN_LEFT_PRESSED;
-  if (lastBtnState[3] && !current[3]) lastEvent = BTN_RIGHT_PRESSED;
-  for (int i = 0; i < 4; i++) lastBtnState[i] = current[i];
+    bool current[4] = {
+        (digitalRead(BTN_UP) == HIGH), 
+        (digitalRead(BTN_DOWN) == HIGH), 
+        (digitalRead(BTN_LEFT) == HIGH), 
+        (digitalRead(BTN_RIGHT) == HIGH)
+    };
+    lastEvent = BTN_NONE;
+    uint32_t now = millis();
+
+    for(int i=0; i<4; i++) {
+        // 1. 边缘检测：刚按下的瞬间
+        if (lastBtnState[i] == true && current[i] == false) { 
+            if (i == 0) { lastEvent = BTN_UP_PRESSED;   btnNextRepeat[0] = now + 400; } // 400ms 后触发第一次连发
+            if (i == 1) { lastEvent = BTN_DOWN_PRESSED; btnNextRepeat[1] = now + 400; }
+            if (i == 2) { lastEvent = BTN_LEFT_PRESSED; }
+            if (i == 3) { lastEvent = BTN_RIGHT_PRESSED; }
+        } 
+        // 2. 长按连发检测：只针对 UP 和 DOWN 按键
+        else if (lastBtnState[i] == false && current[i] == false) {
+            if (i == 0 && now >= btnNextRepeat[0]) {
+                lastEvent = BTN_UP_PRESSED;
+                btnNextRepeat[0] = now + 80; // 连发速度：每 80ms 触发一次
+            }
+            if (i == 1 && now >= btnNextRepeat[1]) {
+                lastEvent = BTN_DOWN_PRESSED;
+                btnNextRepeat[1] = now + 80;
+            }
+        }
+        lastBtnState[i] = current[i];
+    }
 }
 
 BtnEvent HAL::getEvent() {

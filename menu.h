@@ -13,6 +13,7 @@ enum PageState { PAGE_SPLASH,
                  PAGE_DEV_STAT,
                  PAGE_SPORT1,
                  PAGE_SPORT2,
+                 PAGE_SPORT3,
                  PAGE_SUMMARY };
 
 class MenuManager {
@@ -57,6 +58,8 @@ private:
   static float visualDevCursorY;
   static float visualDevScrollY;
   static void drawDevStat(int ox);
+  static float visualSatTxtScrollY;  // 【修复编译报错：补上声明】
+  static void drawSport3(int ox);    // 【新增】实时轨迹页面
 };
 
 #endif
