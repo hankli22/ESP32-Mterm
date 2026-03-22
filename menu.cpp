@@ -612,24 +612,31 @@ void MenuManager::drawTrackMap(int ox, int oy, int lapIdx) {
 
 
 void MenuManager::drawDevMenu(int ox) {
-  auto u8g2 = HAL::getDisplay();
-  u8g2->setFont(u8g2_font_6x10_tf);
-  u8g2->drawStr(ox + 2, 10, "--- DEV MENU ---");
+    auto u8g2 = HAL::getDisplay();
+    u8g2->setFont(u8g2_font_6x10_tf);
+    
+    // 1. 先计算出平滑滚动的值
+    visualDevScrollY = smoothLerp(visualDevScrollY, devScroll * 15, 0.2f);
+    visualDevCursorY = smoothLerp(visualDevCursorY, devMenuIdx * 15, 0.3f);
 
-  // 【新增】包含 dev_stat 和结尾空白行
-  const char* items[] = { "1. Basic Info", "2.[sat_view_txt]", "3. [sat_view_gui]", "4. [dev_stat]", "" };
-
-  visualDevScrollY = smoothLerp(visualDevScrollY, devScroll * 15, 0.2f);
-  visualDevCursorY = smoothLerp(visualDevCursorY, devMenuIdx * 15, 0.3f);
-
-  for (int i = 0; i < 5; i++) {
-    float itemY = 25 + i * 15 - visualDevScrollY;
-    if (itemY < 10 || itemY > 70) continue;
-    u8g2->drawStr(ox + 12, (int)itemY, items[i]);
-  }
-
-  float curY = 25 + visualDevCursorY - visualDevScrollY;
-  if (devMenuIdx != 4) u8g2->drawStr(ox + 2, (int)curY, ">");
+    // 2. 【修复】：让标题的 Y 坐标也减去 visualDevScrollY，这样它就会跟着菜单一起滑出屏幕
+    float titleY = 12 - visualDevScrollY;
+    if (titleY > -10) { // 稍微优化一下，完全滚出屏幕就不画了
+        u8g2->drawStr(ox + 2, (int)titleY, "--- DEV MENU ---");
+    }
+    
+    // 3. 菜单项绘制
+    const char* items[] = {"1. Basic Info", "2. [sat_view_txt]", "3. [sat_view_gui]", "4.[dev_stat]", ""};
+    for(int i=0; i<5; i++) {
+        // 第一项的起始 Y 坐标从 27 开始，留出标题的位置
+        float itemY = 27 + i * 15 - visualDevScrollY; 
+        if (itemY < 0 || itemY > 70) continue; 
+        u8g2->drawStr(ox + 12, (int)itemY, items[i]);
+    }
+    
+    // 4. 光标绘制
+    float curY = 27 + visualDevCursorY - visualDevScrollY;
+    if (devMenuIdx != 4) u8g2->drawStr(ox + 2, (int)curY, ">");
 }
 
 // 1. 卫星文本信息页
