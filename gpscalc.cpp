@@ -72,27 +72,25 @@ static float calcDist(double lat1, double lng1, double lat2, double lng2) {
 }
 
 String GPSCalc::getDateTime() {
-  if (!gps.time.isValid() || gps.date.year() < 2020) {
-    if (gps.time.isValid()) {
-      char tBuf[20];
-      int h = (gps.time.hour() + 8) % 24;
-      sprintf(tBuf, "TIME: %02d:%02d:%02d", h, (int)gps.time.minute(), (int)gps.time.second());
-      return String(tBuf);
+    if (!gps.time.isValid() || gps.date.year() < 2020) {
+        if (gps.time.isValid()) {
+            char tBuf[32]; // 【修复】：扩大缓冲区到32
+            int h = (gps.time.hour() + 8) % 24;
+            sprintf(tBuf, "TIME: %02d:%02d:%02d", h, (int)gps.time.minute(), (int)gps.time.second());
+            return String(tBuf);
+        }
+        return "WAITING SATELLITES";
     }
-    return "WAITING SATELLITES";
-  }
-  char timeBuf[20];
-  int localHour = gps.time.hour() + 8;
-  int localDay = gps.date.day();
-  if (localHour >= 24) {
-    localHour -= 24;
-    localDay += 1;
-  }
-  sprintf(timeBuf, "%02d/%02d/%02d %02d:%02d:%02d",
-          (int)(gps.date.year() % 100), (int)gps.date.month(), (int)localDay,
-          (int)localHour, (int)gps.time.minute(), (int)gps.time.second());
-  return String(timeBuf);
+    char timeBuf[32]; // 【修复】：扩大缓冲区到32防溢出警告
+    int localHour = gps.time.hour() + 8;
+    int localDay = gps.date.day();
+    if (localHour >= 24) { localHour -= 24; localDay += 1; }
+    sprintf(timeBuf, "%02d/%02d/%02d %02d:%02d:%02d", 
+            (int)(gps.date.year() % 100), (int)gps.date.month(), (int)localDay, 
+            (int)localHour, (int)gps.time.minute(), (int)gps.time.second());
+    return String(timeBuf);
 }
+
 
 void GPSCalc::process() {
   static char nmeaBuf[85];

@@ -85,25 +85,25 @@ void MenuManager::handleInput() {
           setIdx--;
           if (setIdx < 0) setIdx = 0;
         }
-        // 最大索引改为 10，允许光标落到最底部的空白处
         if (evt == BTN_DOWN_PRESSED) {
           setIdx++;
-          if (setIdx > 10) setIdx = 10;
-        }
+          if (setIdx > 11) setIdx = 11;
+        }  // 最大上限改为 11
         if (evt == BTN_LEFT_PRESSED) { currentPage = PAGE_START; }
         if (evt == BTN_RIGHT_PRESSED) {
-          if (setIdx == 6) {
+          if (setIdx == 7) {
             saveConfig();
             currentPage = PAGE_START;
-          } else if (setIdx == 7) {
-            HAL::sleepDevice();
-          } else if (setIdx == 8) {
+          }                                              //[save]
+          else if (setIdx == 8) { HAL::sleepDevice(); }  //[pwr_off]
+          else if (setIdx == 9) {
             currentPage = PAGE_DEV_MENU;
             devMenuIdx = 0;
-          } else if (setIdx == 9) {
+          }                         // [dev_page]
+          else if (setIdx == 10) {  // [gps_stdby]
             Serial1.println("$PCAS04,1*18");
             currentPage = PAGE_START;
-          } else if (setIdx == 10) { /* 选到了空白项，什么都不做 */
+          } else if (setIdx == 11) { /* 选到了空白项，什么都不做 */
           } else {
             isEditing = true;
             tempCfg = sysCfg;
@@ -127,6 +127,7 @@ void MenuManager::handleInput() {
             else sysCfg.screen_off = 30;
           }
           if (setIdx == 5) sysCfg.storage_track = (sysCfg.storage_track + 1) % 4;
+          if (setIdx == 6) sysCfg.en_multycol = !sysCfg.en_multycol;  // 【新增】开关抖动算法
         }
         if (evt == BTN_UP_PRESSED) {
           sysCfg = tempCfg;
@@ -310,22 +311,20 @@ void MenuManager::drawStartMenu(int ox) {
 
 void MenuManager::drawSettings(int ox) {
   auto u8g2 = HAL::getDisplay();
-  u8g2->setFont(u8g2_font_6x10_tf);
-
-  // 数组增加到 11 项，最后增加一个空字符串 ""
-  const char* titles[] = { "mode:", "freq:", "track:", "scr_off:", "pwr_btn:", "storage:", "[save]", "[pwr_off]", "[dev_page]", "[gps_stdby]", "" };
+  // 数组增加到 12 项，加入了 multi_col
+  const char* titles[] = { "mode:", "freq:", "track:", "scr_off:", "pwr_btn:", "storage:", "multi_col:", "[save]", "[pwr_off]", "[dev_page]", "[gps_stdby]", "" };
   char vFreq[10], vScr[10], vStore[10];
   sprintf(vFreq, sysCfg.record_freq == 0.5 ? "0.5Hz" : "%dHz", (int)sysCfg.record_freq);
   sprintf(vScr, sysCfg.screen_off == 0 ? "never" : "%ds", sysCfg.screen_off);
   sprintf(vStore, sysCfg.storage_track == 0 ? "disable" : "%d", sysCfg.storage_track);
 
-  // 对应增加到 11 项
-  const char* vals[] = { "running", vFreq, sysCfg.draw_track ? "yes" : "no", vScr, "hold_3s", vStore, "", "", "", "", "" };
+  // 对应加入 multi_col 的值
+  const char* vals[] = { "running", vFreq, sysCfg.draw_track ? "yes" : "no", vScr, "hold_3s", vStore, sysCfg.en_multycol ? "yes" : "no", "", "", "", "", "" };
 
   visualSetScrollY = smoothLerp(visualSetScrollY, setScroll * 12, 0.2f);
   visualSetCursorY = smoothLerp(visualSetCursorY, setIdx * 12, 0.3f);
 
-  for (int i = 0; i < 11; i++) {  // 循环改为 11
+  for (int i = 0; i < 12; i++) {  // 循环改为 12
     float itemY = 20 + i * 12 - visualSetScrollY;
     if (itemY < 5 || itemY > 70) continue;
     u8g2->drawStr(ox + 10, (int)itemY, titles[i]);
@@ -333,8 +332,7 @@ void MenuManager::drawSettings(int ox) {
   }
 
   float curY = 20 + visualSetCursorY - visualSetScrollY;
-  // 如果光标在第11项(索引10)的空白处，则隐藏光标
-  if (setIdx != 10) u8g2->drawStr(ox + 0, (int)curY, isEditing ? "*" : ">");
+  if (setIdx != 11) u8g2->drawStr(ox + 0, (int)curY, isEditing ? "*" : ">");  // 第12项(索引11)是空白项
 }
 
 void MenuManager::drawDevPage(int ox) {
@@ -448,71 +446,74 @@ void MenuManager::drawSport2(int ox) {
 }
 
 void MenuManager::drawSummary(int ox) {
-    auto u8g2 = HAL::getDisplay();
-    u8g2->setFont(u8g2_font_6x10_tf);
-    u8g2->drawStr(ox + 2, 10, "Summary");
+  auto u8g2 = HAL::getDisplay();
+  u8g2->setFont(u8g2_font_6x10_tf);
+  u8g2->drawStr(ox + 2, 10, "Summary");
 
-    // 【新增与修复】：安全计算总平均配速，加入 durationSec > 0 的除0保护
-    float avgPace = 0;
-    if (GPSCalc::totalDistance > 10 && GPSCalc::durationSec > 0) {
-        float speedKmh = (GPSCalc::totalDistance / GPSCalc::durationSec) * 3.6f;
-        if (speedKmh > 1.0f) avgPace = 60.0f / speedKmh;
+  // 【新增与修复】：安全计算总平均配速，加入 durationSec > 0 的除0保护
+  float avgPace = 0;
+  if (GPSCalc::totalDistance > 10 && GPSCalc::durationSec > 0) {
+    float speedKmh = (GPSCalc::totalDistance / GPSCalc::durationSec) * 3.6f;
+    if (speedKmh > 1.0f) avgPace = 60.0f / speedKmh;
+  }
+
+  // 在右上角显示全局平均配速
+  u8g2->setCursor(ox + 60, 10);
+  if (avgPace > 0) {
+    u8g2->print("Avg:");
+    u8g2->print((int)avgPace);
+    u8g2->print("'");
+    int avgSec = (int)((avgPace - (int)avgPace) * 60);
+    if (avgSec < 10) u8g2->print("0");  // 补零逻辑
+    u8g2->print(avgSec);
+    u8g2->print("\"");
+  }
+
+  // 寻找最慢的圈 (耗时最大的圈)
+  int slowestLapIdx = -1;
+  int maxTime = 0;
+  for (int i = 0; i < GPSCalc::laps; i++) {
+    if (GPSCalc::lapHistory[i].timeSec > maxTime) {
+      maxTime = GPSCalc::lapHistory[i].timeSec;
+      slowestLapIdx = i;
     }
-    
-    // 在右上角显示全局平均配速
-    u8g2->setCursor(ox + 60, 10);
-    if (avgPace > 0) {
-        u8g2->print("Avg:"); u8g2->print((int)avgPace); u8g2->print("'");
-        int avgSec = (int)((avgPace - (int)avgPace) * 60);
-        if (avgSec < 10) u8g2->print("0"); // 补零逻辑
-        u8g2->print(avgSec); u8g2->print("\"");
-    }
+  }
 
-    // 寻找最慢的圈 (耗时最大的圈)
-    int slowestLapIdx = -1;
-    int maxTime = 0;
-    for (int i = 0; i < GPSCalc::laps; i++) {
-        if (GPSCalc::lapHistory[i].timeSec > maxTime) {
-            maxTime = GPSCalc::lapHistory[i].timeSec;
-            slowestLapIdx = i;
-        }
-    }
+  // 绘制前4圈的圈速列表
+  for (int i = 0; i < GPSCalc::laps && i < 4; i++) {
+    int y = 24 + i * 10;
 
-    // 绘制前4圈的圈速列表
-    for (int i = 0; i < GPSCalc::laps && i < 4; i++) {
-        int y = 24 + i * 10;
-        
-        // 绘制光标 (如果在按键选择当前圈)
-        if (viewLapIdx == i + 1) u8g2->drawStr(ox + 0, y, ">");
+    // 绘制光标 (如果在按键选择当前圈)
+    if (viewLapIdx == i + 1) u8g2->drawStr(ox + 0, y, ">");
 
-        // 最慢圈高亮反色背景
-        if (i == slowestLapIdx) {
-            u8g2->drawBox(ox + 8, y - 8, 55, 10);
-            u8g2->setDrawColor(0); // 把画笔变成黑色，这样字就是镂空的
-        }
-
-        u8g2->setCursor(ox + 10, y);
-        u8g2->print("L");
-        u8g2->print(i + 1);
-        u8g2->print(": ");
-        u8g2->print((int)GPSCalc::lapHistory[i].pace);
-        u8g2->print("'");
-        
-        // 【UI细节修复】：秒数小于10时补零
-        int lapSec = (int)((GPSCalc::lapHistory[i].pace - (int)GPSCalc::lapHistory[i].pace) * 60);
-        if (lapSec < 10) u8g2->print("0"); 
-        u8g2->print(lapSec);
-        u8g2->print("\"");
-
-        u8g2->setDrawColor(1); // 必须恢复画笔颜色，否则后面的UI全黑了
+    // 最慢圈高亮反色背景
+    if (i == slowestLapIdx) {
+      u8g2->drawBox(ox + 8, y - 8, 55, 10);
+      u8g2->setDrawColor(0);  // 把画笔变成黑色，这样字就是镂空的
     }
 
-    // 绘制轨迹微缩地图
-    if (sysCfg.draw_track) drawTrackMap(ox + 70, 15, viewLapIdx);
+    u8g2->setCursor(ox + 10, y);
+    u8g2->print("L");
+    u8g2->print(i + 1);
+    u8g2->print(": ");
+    u8g2->print((int)GPSCalc::lapHistory[i].pace);
+    u8g2->print("'");
 
-    // 底部视图状态提示
-    u8g2->setFont(u8g2_font_4x6_tf);
-    u8g2->drawStr(ox + 70, 62, viewLapIdx == 0 ? "VIEW: ALL" : "VIEW: LAP");
+    // 【UI细节修复】：秒数小于10时补零
+    int lapSec = (int)((GPSCalc::lapHistory[i].pace - (int)GPSCalc::lapHistory[i].pace) * 60);
+    if (lapSec < 10) u8g2->print("0");
+    u8g2->print(lapSec);
+    u8g2->print("\"");
+
+    u8g2->setDrawColor(1);  // 必须恢复画笔颜色，否则后面的UI全黑了
+  }
+
+  // 绘制轨迹微缩地图
+  if (sysCfg.draw_track) drawTrackMap(ox + 70, 15, viewLapIdx);
+
+  // 底部视图状态提示
+  u8g2->setFont(u8g2_font_4x6_tf);
+  u8g2->drawStr(ox + 70, 62, viewLapIdx == 0 ? "VIEW: ALL" : "VIEW: LAP");
 }
 
 void MenuManager::drawTrackMap(int ox, int oy, int lapIdx) {
@@ -559,92 +560,101 @@ void MenuManager::drawDevMenu(int ox) {
   }
 }
 
+// 1. 卫星文本信息页
 void MenuManager::drawSatTxt(int ox) {
-  auto u8g2 = HAL::getDisplay();
-  u8g2->setFont(u8g2_font_5x8_tf);
-  int y = 20 - satTxtScroll;  // 从20开始，给顶栏留空
-  const char* sName[] = { "GPS", "BDS", "GLO", "SBS" };
-
-  for (int s = 0; s < 4; s++) {
-    if (GPSCalc::sysInView[s] == 0) continue;  // 没星系则跳过
-    if (y > 10 && y < 70) {
-      u8g2->setCursor(ox + 2, y);
-      u8g2->print("[");
-      u8g2->print(sName[s]);
-      u8g2->print("*");
-      u8g2->print(GPSCalc::sysTracked[s]);
-      u8g2->print("/");
-      u8g2->print(GPSCalc::sysInView[s]);
-      u8g2->print("]");
-    }
-    y += 10;
-    for (int i = 0; i < GPSCalc::satCount; i++) {
-      if (GPSCalc::sats[i].sys == s) {
+    auto u8g2 = HAL::getDisplay();
+    u8g2->setFont(u8g2_font_5x8_tf);
+    int y = 20 - satTxtScroll; 
+    const char* sName[] = {"GPS", "BDS", "GLO", "SBS"};
+    
+    for (int s = 0; s < 4; s++) {
+        if (GPSCalc::sysInView[s] == 0) continue; 
         if (y > 10 && y < 70) {
-          char buf[30];
-          sprintf(buf, " %02d   %02d   %02d   %03d", GPSCalc::sats[i].prn, GPSCalc::sats[i].snr, GPSCalc::sats[i].ele, GPSCalc::sats[i].azi);
-          u8g2->drawStr(ox + 2, y, buf);
+            u8g2->setCursor(ox + 2, y);
+            u8g2->print("["); u8g2->print(sName[s]); u8g2->print("*");
+            u8g2->print(GPSCalc::sysTracked[s]); u8g2->print("/");
+            u8g2->print(GPSCalc::sysInView[s]); u8g2->print("]");
         }
         y += 10;
-      }
+        for (int i = 0; i < GPSCalc::satCount; i++) {
+            if (GPSCalc::sats[i].sys == s) {
+                if (y > 10 && y < 70) {
+                    char buf[32];
+                    sprintf(buf, " %02d   %02d   %02d   %03d", GPSCalc::sats[i].prn, GPSCalc::sats[i].snr, GPSCalc::sats[i].ele, GPSCalc::sats[i].azi);
+                    u8g2->drawStr(ox + 2, y, buf);
+                }
+                y += 10;
+            }
+        }
     }
-  }
-  // 绘制吸顶表头
-  u8g2->setDrawColor(0);
-  u8g2->drawBox(ox, 0, 128, 12);
-  u8g2->setDrawColor(1);
-  u8g2->drawStr(ox + 2, 9, " PRN SNR ELE AZI");
-  u8g2->drawLine(ox, 11, ox + 128, 11);
-}
+    u8g2->setDrawColor(0); u8g2->drawBox(ox, 0, 128, 12); u8g2->setDrawColor(1);
+    u8g2->drawStr(ox + 2, 9, " PRN SNR ELE AZI");
+    u8g2->drawLine(ox, 11, ox+128, 11);
+} // <--- 这里一定要闭合这个函数！
 
+// 2. 卫星图形化GUI页
 void MenuManager::drawSatGui(int ox) {
-  auto u8g2 = HAL::getDisplay();
-  u8g2->setFont(u8g2_font_4x6_tf);
-  const char* sName[] = { "GPS", "BDS", "GLO", "SBS" };
+    auto u8g2 = HAL::getDisplay();
+    u8g2->setFont(u8g2_font_4x6_tf);
+    const char* sName[] = { "GPS", "BDS", "GLO", "SBS" };
 
-  // 1. 绘制各个星系占比圆饼图 (利用连线法)
-  int cx = ox + 30, cy = 35, r = 22;
-  int total = 0;
-  for (int i = 0; i < 4; i++) total += GPSCalc::sysTracked[i];
-  u8g2->drawCircle(cx, cy, r);
-  if (total > 0) {
-    float angle = -PI / 2;
-    for (int i = 0; i < 4; i++) {
-      if (GPSCalc::sysTracked[i] == 0) continue;
-      float sweep = (GPSCalc::sysTracked[i] / (float)total) * 2 * PI;
-      u8g2->drawLine(cx, cy, cx + r * cos(angle), cy + r * sin(angle));
-      int lx = cx + (r + 8) * cos(angle + sweep / 2) - 6;
-      int ly = cy + (r + 8) * sin(angle + sweep / 2) + 2;
-      u8g2->setCursor(lx, ly);
-      u8g2->print(sName[i]);
-      angle += sweep;
-    }
-  } else {
-    u8g2->drawStr(cx - 10, cy + 2, "NO SAT");
-  }
+    int cx = ox + 30, cy = 35, r = 22;
+    int total = 0;
+    for (int i = 0; i < 4; i++) total += GPSCalc::sysTracked[i];
+    u8g2->drawCircle(cx, cy, r);
 
-  // 2. 绘制 Top 5 信号最强的已跟踪卫星
-  u8g2->drawStr(ox + 65, 8, "TOP 5 SATS:");
-  int top[40];
-  for (int i = 0; i < GPSCalc::satCount; i++) top[i] = i;
-  for (int i = 0; i < GPSCalc::satCount - 1; i++) {  // 简易冒泡排序
-    for (int j = i + 1; j < GPSCalc::satCount; j++) {
-      if (GPSCalc::sats[top[j]].snr > GPSCalc::sats[top[i]].snr) {
-        int tmp = top[i];
-        top[i] = top[j];
-        top[j] = tmp;
-      }
+    if (total > 0) {
+        float angle = -PI / 2;
+        for (int i = 0; i < 4; i++) {
+            if (GPSCalc::sysTracked[i] == 0) continue;
+            float sweep = (GPSCalc::sysTracked[i] / (float)total) * 2 * PI;
+
+        // 【优化】：放弃基于半径的步长，改为基于固定角度的步长
+        if (sysCfg.en_multycol) {
+            float angleStep = 0;
+            // 密度越低，线条越少，CPU 负担越小，运行越流畅！
+            if (i == 0)      angleStep = PI / 48.0f; // GPS:  (极密)
+            else if (i == 1) angleStep = PI / 16.0f;  // BDS:  (中密)
+            else if (i == 2) angleStep = PI / 9.0f;  // GLO: (稀疏)
+            // SBS(i==3) 保持 0，全白
+
+            if (angleStep > 0) {
+                // 仅绘制从中心向边缘的线段
+                for (float a = angle; a < angle + sweep; a += angleStep) {
+                    // 【关键优化】：为了性能，只画圆周半径的 80%
+                    // 不必从中心画到边缘，画一条短线效果是一样的
+                    u8g2->drawLine(cx + (r*0.2f)*cos(a), cy + (r*0.2f)*sin(a), 
+                                   cx + r*cos(a), cy + r*sin(a));
+                }
+            }
+        }
+            u8g2->drawLine(cx, cy, cx + r * cos(angle), cy + r * sin(angle));
+            int lx = cx + (r + 8) * cos(angle + sweep / 2) - 6;
+            int ly = cy + (r + 8) * sin(angle + sweep / 2) + 2;
+            u8g2->setCursor(lx, ly);
+            u8g2->print(sName[i]);
+            angle += sweep;
+        }
+    } else {
+        u8g2->drawStr(cx - 10, cy + 2, "NO SAT");
     }
-  }
-  for (int i = 0; i < 5 && i < GPSCalc::satCount; i++) {
-    int idx = top[i];
-    if (GPSCalc::sats[idx].snr == 0) break;
-    u8g2->setCursor(ox + 65, 18 + i * 9);
-    u8g2->print("[");
-    u8g2->print(sName[GPSCalc::sats[idx].sys]);
-    u8g2->print("] ");
-    u8g2->print(GPSCalc::sats[idx].prn);
-    u8g2->print(" S:");
-    u8g2->print(GPSCalc::sats[idx].snr);
-  }
+
+    u8g2->drawStr(ox + 65, 8, "TOP 5 SATS:");
+    int top[40];
+    for (int i = 0; i < GPSCalc::satCount; i++) top[i] = i;
+    for (int i = 0; i < GPSCalc::satCount - 1; i++) {
+        for (int j = i + 1; j < GPSCalc::satCount; j++) {
+            if (GPSCalc::sats[top[j]].snr > GPSCalc::sats[top[i]].snr) {
+                int tmp = top[i]; top[i] = top[j]; top[j] = tmp;
+            }
+        }
+    }
+    for (int i = 0; i < 5 && i < GPSCalc::satCount; i++) {
+        int idx = top[i];
+        if (GPSCalc::sats[idx].snr == 0) break;
+        u8g2->setCursor(ox + 65, 18 + i * 9);
+        u8g2->print("["); u8g2->print(sName[GPSCalc::sats[idx].sys]); u8g2->print("] ");
+        u8g2->print(GPSCalc::sats[idx].prn); u8g2->print(" S:");
+        u8g2->print(GPSCalc::sats[idx].snr);
+    }
 }

@@ -9,6 +9,7 @@ struct SystemConfig {
     int screen_off = 30;     // 30, 60(1m), 300(5m), 0(never)
     int pwr_off_btn = 0;     // 0: hold_3s, 1: w,a,s,d (UI展示用)
     int storage_track = 0;   // 0: disable, 1, 2, 4
+    bool en_multycol = true; // 【新增】是否启用多颜色(灰阶抖动)饼图
 };
 
 extern SystemConfig sysCfg;
