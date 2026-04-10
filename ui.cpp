@@ -1,6 +1,6 @@
-#include "menu.h"
-#include "hal.h"
-#include "gpscalc.h"
+#include "ui.h"
+#include "hardwareLayer.h"
+#include "gps_module.h"
 #include "config.h"
 
 PageState MenuManager::currentPage = PAGE_SPLASH;

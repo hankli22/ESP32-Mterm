@@ -1,4 +1,4 @@
-#include "hal.h"
+#include "hardwareLayer.h"
 #include <SPI.h>
 
 U8G2_SSD1306_128X64_NONAME_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/U8X8_PIN_NONE, /* dc=*/21, /* reset=*/U8X8_PIN_NONE);
@@ -113,6 +113,6 @@ void HAL::sleepDevice() {
   digitalWrite(OLED_RST, LOW);
   digitalWrite(GPS_PWR_MOSFET, HIGH);
 
-  esp_deep_sleep_enable_gpio_wakeup((1ULL << 4) | (1ULL << 5) | (1ULL << 6) | (1ULL << 7), ESP_GPIO_WAKEUP_GPIO_LOW);
+  esp_sleep_enable_ext1_wakeup((1ULL << 4) | (1ULL << 5) | (1ULL << 6) | (1ULL << 7), ESP_EXT1_WAKEUP_ANY_LOW);
   esp_deep_sleep_start();
 }

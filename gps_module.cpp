@@ -1,4 +1,4 @@
-#include "gpscalc.h"
+#include "gps_module.h"
 #include "config.h"
 
 bool GPSCalc::isRunning = false;

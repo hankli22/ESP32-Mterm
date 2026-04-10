@@ -1,5 +1,5 @@
-#ifndef GPSCALC_H
-#define GPSCALC_H
+#ifndef GPSMODULE_H
+#define GPSMODULE_H
 
 #include <Arduino.h>
 #include <TinyGPS++.h>

@@ -1,7 +1,7 @@
 #include <Arduino.h>
-#include "hal.h"
-#include "gpscalc.h"
-#include "menu.h"
+#include "hardwareLayer.h"
+#include "gps_module.h"
+#include "ui.h"
 #include "config.h"
 #pragma GCC optimize("O2")
 

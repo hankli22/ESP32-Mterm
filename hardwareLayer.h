@@ -1,5 +1,5 @@
-#ifndef HAL_H
-#define HAL_H
+#ifndef HARDWARELAYER_H
+#define HARDWARELAYER_H
 
 #include <U8g2lib.h>
 
