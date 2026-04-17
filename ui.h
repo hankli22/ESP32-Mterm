@@ -58,8 +58,8 @@ private:
   static float visualDevCursorY;
   static float visualDevScrollY;
   static void drawDevStat(int ox);
-  static float visualSatTxtScrollY;  // 【修复编译报错：补上声明】
-  static void drawSport3(int ox);    // 【新增】实时轨迹页面
+  static float visualSatTxtScrollY;
+  static void drawSport3(int ox);
 };
 
 #endif

@@ -27,7 +27,6 @@ float MenuManager::visualDevCursorY = 0;
 float MenuManager::visualDevScrollY = 0;
 float MenuManager::visualSatTxtScrollY = 0;
 
-// PID 平滑插值函数
 float MenuManager::smoothLerp(float current, float target, float speed) {
   if (abs(target - current) < 0.5f) return target;
   return current + (target - current) * speed;
@@ -36,7 +35,6 @@ float MenuManager::smoothLerp(float current, float target, float speed) {
 void MenuManager::handleInput() {
   BtnEvent evt = HAL::getEvent();
 
-  // 【息屏唤醒拦截】
   if (evt != BTN_NONE) {
     if (isScreenOff) {
       isScreenOff = false;
@@ -91,7 +89,6 @@ void MenuManager::handleInput() {
           setIdx--;
           if (setIdx < 0) setIdx = 0;
         }
-        // 【校准】：总共 14 项（索引 0-13），最大设为 13
         if (evt == BTN_DOWN_PRESSED) {
           setIdx++;
           if (setIdx > 13) setIdx = 13;
@@ -99,34 +96,31 @@ void MenuManager::handleInput() {
 
         if (evt == BTN_LEFT_PRESSED) { currentPage = PAGE_START; }
         if (evt == BTN_RIGHT_PRESSED) {
-          // --- 动作类选项索引校准 ---
           if (setIdx == 9) {
             saveConfig();
             currentPage = PAGE_START;
-          }                                               // [save]
-          else if (setIdx == 10) { HAL::sleepDevice(); }  // [pwr_off]
+          }
+          else if (setIdx == 10) { HAL::sleepDevice(); }
           else if (setIdx == 11) {
             currentPage = PAGE_DEV_MENU;
             devMenuIdx = 0;
-          }  // [dev_page]
+          }
           else if (setIdx == 12) {
             Serial1.println("$PCAS04,1*18");
             currentPage = PAGE_START;
-          }                        // [gps_stdby]
-          else if (setIdx == 13) { /* 空白项 */
+          }
+          else if (setIdx == 13) {
           } else {
             isEditing = true;
             tempCfg = sysCfg;
-          }  // 其他项进入编辑模式
+          }
         }
-        // 滚动视口控制
         if (setIdx < setScroll) setScroll = setIdx;
         if (setIdx > setScroll + 4) setScroll = setIdx - 4;
       } else {
-        // --- 编辑模式：上下改值，左确认右取消 ---
         if (evt == BTN_UP_PRESSED || evt == BTN_DOWN_PRESSED) {
           int dir = (evt == BTN_DOWN_PRESSED) ? 1 : -1;
-          if (setIdx == 1) {  // Freq
+          if (setIdx == 1) {
             if (dir > 0) {
               if (sysCfg.record_freq == 5.0) sysCfg.record_freq = 2.0;
               else if (sysCfg.record_freq == 2.0) sysCfg.record_freq = 1.0;
@@ -139,7 +133,7 @@ void MenuManager::handleInput() {
               else sysCfg.record_freq = 0.5;
             }
           } else if (setIdx == 2) sysCfg.draw_track = !sysCfg.draw_track;
-          else if (setIdx == 3) {  // Screen Off
+          else if (setIdx == 3) {
             if (dir > 0) {
               if (sysCfg.screen_off == 30) sysCfg.screen_off = 60;
               else if (sysCfg.screen_off == 60) sysCfg.screen_off = 300;
@@ -151,11 +145,11 @@ void MenuManager::handleInput() {
               else if (sysCfg.screen_off == 60) sysCfg.screen_off = 30;
               else sysCfg.screen_off = 0;
             }
-          } else if (setIdx == 5) {  // Storage
+          } else if (setIdx == 5) {
             if (dir > 0) sysCfg.storage_track = (sysCfg.storage_track + 1) % 4;
             else sysCfg.storage_track = (sysCfg.storage_track + 3) % 4;
           } else if (setIdx == 6) sysCfg.en_multycol = !sysCfg.en_multycol;
-          else if (setIdx == 7) {  // Contrast
+          else if (setIdx == 7) {
             if (dir > 0) {
               sysCfg.contrast++;
               if (sysCfg.contrast > 5) sysCfg.contrast = 1;
@@ -164,7 +158,7 @@ void MenuManager::handleInput() {
               if (sysCfg.contrast < 1) sysCfg.contrast = 5;
             }
             HAL::getDisplay()->setContrast(sysCfg.contrast * 51);
-          } else if (setIdx == 8) sysCfg.auto_sleep = !sysCfg.auto_sleep;  // Auto Sleep
+          } else if (setIdx == 8) sysCfg.auto_sleep = !sysCfg.auto_sleep;
         }
 
         if (evt == BTN_LEFT_PRESSED) { isEditing = false; }
@@ -254,8 +248,8 @@ void MenuManager::handleInput() {
 
     case PAGE_SUMMARY:
       if (evt == BTN_LEFT_PRESSED) {
-        if (sysCfg.screen_off == 0) currentPage = PAGE_START;  // 如果没开自动息屏，回主页
-        else HAL::sleepDevice();                               // 否则关机省电
+        if (sysCfg.screen_off == 0) currentPage = PAGE_START;
+        else HAL::sleepDevice();
       }
       if (evt == BTN_UP_PRESSED) {
         viewLapIdx--;
@@ -298,13 +292,12 @@ void MenuManager::update() {
   else if (currentPage == PAGE_DEV_STAT) targetX = -896;
   else if (currentPage == PAGE_SPORT1) targetX = -1024;
   else if (currentPage == PAGE_SPORT2) targetX = -1152;
-  else if (currentPage == PAGE_SPORT3) targetX = -1280;  // 【新增】
+  else if (currentPage == PAGE_SPORT3) targetX = -1280;
   else if (currentPage == PAGE_SUMMARY) targetX = -1408;
 
   currentPageX = smoothLerp(currentPageX, targetX, 0.2f);
   int ox = (int)currentPageX;
 
-  // 视口裁剪加上新页面
   if (ox > -128 && ox < 128) drawSplash(ox);
   if (ox + 128 > -128 && ox + 128 < 128) drawStartMenu(ox + 128);
   if (ox + 256 > -128 && ox + 256 < 128) drawSettings(ox + 256);
@@ -315,10 +308,11 @@ void MenuManager::update() {
   if (ox + 896 > -128 && ox + 896 < 128) drawDevStat(ox + 896);
   if (ox + 1024 > -128 && ox + 1024 < 128) drawSport1(ox + 1024);
   if (ox + 1152 > -128 && ox + 1152 < 128) drawSport2(ox + 1152);
-  if (ox + 1280 > -128 && ox + 1280 < 128) drawSport3(ox + 1280);  // 【新增】
+  if (ox + 1280 > -128 && ox + 1280 < 128) drawSport3(ox + 1280);
   if (ox + 1408 > -128 && ox + 1408 < 128) drawSummary(ox + 1408);
 
-  u8g2->sendBuffer();
+  //u8g2->sendBuffer();
+  HAL::Flush();
 }
 
 void MenuManager::drawSplash(int ox) {
@@ -331,7 +325,7 @@ void MenuManager::drawSplash(int ox) {
   u8g2->setCursor(ox + 5, 40);
   u8g2->print("左右确认取消，上下值");
   u8g2->setCursor(ox + 5, 54);
-  u8g2->print("初三满分必胜！");
+  u8g2->print("");
   u8g2->setFont(u8g2_font_4x6_tf);
   u8g2->drawStr(ox + 70, 63, "Press RIGHT ->");
 }
@@ -387,15 +381,12 @@ void MenuManager::drawSettings(int ox) {
   auto u8g2 = HAL::getDisplay();
   u8g2->setFont(u8g2_font_6x10_tf);
 
-  // 1. PID 平滑滚动计算
   visualSetScrollY = smoothLerp(visualSetScrollY, setScroll * 15, 0.2f);
   visualSetCursorY = smoothLerp(visualSetCursorY, setIdx * 15, 0.3f);
 
-  // 2. 标题滚动
   float titleY = 12 - visualSetScrollY;
   if (titleY > -10) u8g2->drawStr(ox + 2, (int)titleY, "--- SETTINGS ---");
 
-  // 3. 【校准】：定义 14 个选项
   const char* titles[] = {
     "mode:", "freq:", "track:", "scr_off:", "pwr_btn:",
     "storage:", "multi_col:", "contrast:", "auto_slp:",
@@ -416,10 +407,9 @@ void MenuManager::drawSettings(int ox) {
 
   float curY = 27 + visualSetCursorY - visualSetScrollY;
 
-  // 4. 【校准】：循环 14 次
   for (int i = 0; i < 14; i++) {
     float itemY = 27 + i * 15 - visualSetScrollY;
-    if (itemY < 0 || itemY > 75) continue;  // 视口裁剪
+    if (itemY < 0 || itemY > 75) continue;
 
     float dist = abs(itemY - curY);
     float offsetX = (dist < 15.0f) ? 6.0f * (1.0f - (dist / 15.0f)) : 0;
@@ -428,7 +418,6 @@ void MenuManager::drawSettings(int ox) {
     u8g2->drawStr(ox + 80 + (int)offsetX, (int)itemY, vals[i]);
   }
 
-  // 5. 绘制光标 (最后一项空白项不画)
   if (setIdx != 13) u8g2->drawStr(ox + 2, (int)curY, isEditing ? "*" : ">");
 }
 
@@ -449,7 +438,6 @@ void MenuManager::drawDevMenu(int ox) {
     float itemY = 27 + i * 15 - visualDevScrollY;
     if (itemY < 0 || itemY > 70) continue;
 
-    // 【横向排斥弹性动画】
     float dist = abs(itemY - curY);
     float offsetX = 0;
     if (dist < 15.0f) offsetX = 6.0f * (1.0f - (dist / 15.0f));
@@ -513,7 +501,6 @@ void MenuManager::drawSatTxt(int ox) {
   auto u8g2 = HAL::getDisplay();
   u8g2->setFont(u8g2_font_5x8_tf);
 
-  // 【新增】：PID 平滑滚动计算
   visualSatTxtScrollY = smoothLerp(visualSatTxtScrollY, satTxtScroll, 0.2f);
   float y = 20 - visualSatTxtScrollY;
   const char* sName[] = { "GPS", "BDS", "GLO", "SBS" };
@@ -521,8 +508,8 @@ void MenuManager::drawSatTxt(int ox) {
   for (int s = 0; s < 4; s++) {
     if (GPSCalc::sysInView[s] == 0) continue;
     if (y > 10 && y < 70) {
-      float dist = abs(y - 36);                                         // 距屏幕中心的距离
-      float oxOffset = (dist < 25) ? 4.0f * (1.0f - dist / 25.0f) : 0;  // 滚筒放大效果
+      float dist = abs(y - 36);
+      float oxOffset = (dist < 25) ? 4.0f * (1.0f - dist / 25.0f) : 0;
       u8g2->setCursor(ox + 2 + (int)oxOffset, (int)y);
       u8g2->print("[");
       u8g2->print(sName[s]);
@@ -547,14 +534,12 @@ void MenuManager::drawSatTxt(int ox) {
     }
   }
 
-  // 【新增】：右侧动态进度条指示器
   int maxScroll = (GPSCalc::satCount * 10) - 20;
   if (maxScroll > 0) {
-    int barY = 15 + (int)((visualSatTxtScrollY / maxScroll) * 40);  // 映射到 15~55
+    int barY = 15 + (int)((visualSatTxtScrollY / maxScroll) * 40);
     u8g2->drawBox(ox + 125, barY, 2, 8);
   }
 
-  // 绘制吸顶表头
   u8g2->setDrawColor(0);
   u8g2->drawBox(ox, 0, 126, 12);
   u8g2->setDrawColor(1);
@@ -706,13 +691,11 @@ void MenuManager::drawSport2(int ox) {
   u8g2->print(GPSCalc::satellites);
 }
 
-// 【新增】：运动时实时查看轨迹的页面！
 void MenuManager::drawSport3(int ox) {
   auto u8g2 = HAL::getDisplay();
   u8g2->setFont(u8g2_font_6x10_tf);
   u8g2->drawStr(ox + 2, 10, "Live Track");
 
-  // 左侧显示简要数据
   u8g2->setCursor(ox + 2, 25);
   u8g2->print("D: ");
   u8g2->print((int)GPSCalc::totalDistance);
@@ -724,8 +707,6 @@ void MenuManager::drawSport3(int ox) {
   u8g2->setCursor(ox + 2, 55);
   u8g2->print("C: ");
   u8g2->print(GPSCalc::calories);
-
-  // 右侧直接调用轨迹地图函数，传入 0 表示绘制当前全部轨迹
   drawTrackMap(ox + 70, 12, 0);
 }
 

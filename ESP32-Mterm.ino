@@ -27,7 +27,7 @@ void logicTask(void* pvParameters) {
 
 void setup() {
   Serial.begin(115200);
-  loadConfig();  // 从 NVS 优先读取用户配置
+  loadConfig();
   HAL::init();
   GPSCalc::init();
 
