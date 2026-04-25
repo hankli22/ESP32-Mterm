@@ -167,7 +167,7 @@ void HAL::InitDMA() {
   buscfg.quadhd_io_num = -1;
   buscfg.max_transfer_sz = 1024;
 
-  esp_err_t ret = spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_CH_AUTO);
+  esp_err_t ret = spi_bus_initialize(SPI1_HOST, &buscfg, SPI_DMA_CH_AUTO);
   if (ret != ESP_OK) {
     Serial.printf("DMA: spi_bus_initialize failed: %d\n", ret);
     return;
@@ -181,7 +181,7 @@ void HAL::InitDMA() {
   devcfg.queue_size = 1;
   devcfg.flags = SPI_DEVICE_NO_DUMMY;
 
-  ret = spi_bus_add_device(SPI2_HOST, &devcfg, &HAL::spi_handle);
+  ret = spi_bus_add_device(SPI1_HOST, &devcfg, &HAL::spi_handle);
   if (ret != ESP_OK) {
     Serial.printf("DMA: spi_bus_add_device failed: %d\n", ret);
   }
