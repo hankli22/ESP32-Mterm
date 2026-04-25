@@ -313,7 +313,7 @@ void MenuManager::update() {
   if (ox + 1408 > -128 && ox + 1408 < 128) drawSummary(ox + 1408);
 
   GPSCalc::unlock();
-  HAL::Flush();
+  u8g2->sendBuffer();
 }
 
 void MenuManager::drawSplash(int ox) {
