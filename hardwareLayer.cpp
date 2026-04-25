@@ -1,5 +1,7 @@
 #include "hardwareLayer.h"
 #include <SPI.h>
+#include <driver/gpio.h>
+#include <esp_sleep.h>
 
 
 U8G2_SSD1306_128X64_NONAME_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/U8X8_PIN_NONE, /* dc=*/21, /* reset=*/U8X8_PIN_NONE);
@@ -114,6 +116,16 @@ void HAL::sleepDevice() {
   digitalWrite(OLED_RST, LOW);
   digitalWrite(GPS_PWR_MOSFET, HIGH);
 
-  esp_sleep_enable_ext1_wakeup((1ULL << 4) | (1ULL << 5) | (1ULL << 6) | (1ULL << 7), ESP_EXT1_WAKEUP_ANY_LOW);
+  // ESP32-C6: pinMode 仅设活跃模式，深睡时需独立配置睡眠上拉
+  const uint8_t btns[] = { BTN_UP, BTN_DOWN, BTN_LEFT, BTN_RIGHT };
+  uint64_t mask = 0;
+  for (int i = 0; i < 4; i++) {
+    gpio_sleep_set_direction((gpio_num_t)btns[i], GPIO_MODE_INPUT);
+    gpio_sleep_set_pull_mode((gpio_num_t)btns[i], GPIO_PULLUP_ONLY);
+    mask |= 1ULL << btns[i];
+  }
+  // 保持 LP_IO 域在深睡期间供电（ESP32-C6 特有）
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+  esp_sleep_enable_ext1_wakeup(mask, ESP_EXT1_WAKEUP_ANY_LOW);
   esp_deep_sleep_start();
 }
