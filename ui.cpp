@@ -553,34 +553,71 @@ void MenuManager::drawSatGui(int ox) {
   u8g2->setFont(u8g2_font_4x6_tf);
   const char* sName[] = { "GPS", "BDS", "GLO", "SBS" };
 
+  // Bayer 4x4 有序抖动矩阵
+  static const uint8_t bayer[4][4] = {
+    { 0,  8,  2, 10},
+    {12,  4, 14,  6},
+    { 3, 11,  1,  9},
+    {15,  7, 13,  5}
+  };
+
   int cx = ox + 30, cy = 35, r = 22;
   int total = 0;
   for (int i = 0; i < 4; i++) total += GPSCalc::sysTracked[i];
   u8g2->drawCircle(cx, cy, r);
 
   if (total > 0) {
-    float angle = -PI / 2;
+    // 预计算扇区边界角度 (从 12 点方向顺时针)
+    float secStart[4], secSweep[4];
+    int validSys[4], validN = 0;
+    float ang = -PI / 2;
     for (int i = 0; i < 4; i++) {
       if (GPSCalc::sysTracked[i] == 0) continue;
-      float sweep = (GPSCalc::sysTracked[i] / (float)total) * 2 * PI;
+      secStart[validN] = ang;
+      secSweep[validN] = (GPSCalc::sysTracked[i] / (float)total) * 2 * PI;
+      validSys[validN] = i;
+      validN++;
+      ang += secSweep[validN - 1];
+    }
+    // 各系统抖动阈值：GPS≈75% BDS≈50% GLO≈25% SBS≈100%(实心)
+    const uint8_t density[4] = { 12, 8, 4, 16 };
 
-      if (sysCfg.en_multycol) {
-        float angleStep = 0;
-        if (i == 0) angleStep = PI / 64.0f;
-        else if (i == 1) angleStep = PI / 16.0f;
-        else if (i == 2) angleStep = PI / 9.0f;
-        if (angleStep > 0) {
-          for (float a = angle; a < angle + sweep; a += angleStep) {
-            u8g2->drawLine(cx + (r * 0.2f) * cos(a), cy + (r * 0.2f) * sin(a), cx + r * cos(a), cy + r * sin(a));
+    // 逐像素填充抖动扇形
+    int rSq = r * r;
+    for (int py = cy - r; py <= cy + r; py++) {
+      for (int px = cx - r; px <= cx + r; px++) {
+        int dx = px - cx, dy = py - cy;
+        if (dx * dx + dy * dy > rSq) continue;
+
+        float a = atan2f(dy, dx) + PI / 2;
+        if (a < 0) a += 2 * PI;
+
+        int sec = -1;
+        float cur = 0;
+        for (int s = 0; s < validN; s++) {
+          if (a >= cur && a < cur + secSweep[s]) {
+            sec = validSys[s];
+            break;
           }
+          cur += secSweep[s];
+        }
+        if (sec < 0) continue;
+
+        uint8_t th = sysCfg.en_multycol ? density[sec] : 16;
+        if (bayer[(py - cy) & 3][(px - cx) & 3] < th) {
+          u8g2->drawPixel(px, py);
         }
       }
-      u8g2->drawLine(cx, cy, cx + r * cos(angle), cy + r * sin(angle));
-      int lx = cx + (r + 8) * cos(angle + sweep / 2) - 6;
-      int ly = cy + (r + 8) * sin(angle + sweep / 2) + 2;
+    }
+
+    // 扇区分隔线 + 标签
+    for (int i = 0; i < validN; i++) {
+      float a = secStart[i];
+      u8g2->drawLine(cx, cy, cx + r * cos(a), cy + r * sin(a));
+      int lx = cx + (r + 8) * cos(a + secSweep[i] / 2) - 6;
+      int ly = cy + (r + 8) * sin(a + secSweep[i] / 2) + 2;
       u8g2->setCursor(lx, ly);
-      u8g2->print(sName[i]);
-      angle += sweep;
+      u8g2->print(sName[validSys[i]]);
     }
   } else {
     u8g2->drawStr(cx - 10, cy + 2, "NO SAT");
