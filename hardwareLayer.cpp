@@ -122,43 +122,33 @@ void HAL::sleepDevice() {
 
 
 void HAL::InitDMA() {
-  spi_bus_config_t buscfg;
-  memset(&buscfg, 0, sizeof(spi_bus_config_t));
-  buscfg.mosi_io_num = 23;
-  buscfg.miso_io_num = -1;
-  buscfg.sclk_io_num = 18;
-  buscfg.quadwp_io_num = -1;
-  buscfg.quadhd_io_num = -1;
-  buscfg.max_transfer_sz = 1024;
-
+  // SPI 总线已由 SPI.begin() 初始化，仅需添加设备句柄供 DMA 使用
   spi_device_interface_config_t devcfg;
-  memset(&devcfg, 0, sizeof(spi_device_interface_config_t));
+  memset(&devcfg, 0, sizeof(devcfg));
   devcfg.clock_speed_hz = 40 * 1000 * 1000;
   devcfg.mode = 0;
-  devcfg.spics_io_num = 5;
-  devcfg.queue_size = 7;
+  devcfg.spics_io_num = -1;   // CS 硬件接地，与 U8g2 的 U8X8_PIN_NONE 一致
+  devcfg.queue_size = 1;      // Flush 每次只发一帧，无需深队列
   devcfg.flags = SPI_DEVICE_NO_DUMMY;
 
-  spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_CH_AUTO);
   spi_bus_add_device(SPI2_HOST, &devcfg, &HAL::spi_handle);
 }
 
 void HAL::Flush() {
   if (!HAL::spi_handle) return;
 
-  static const uint8_t scroll_cmds[] = { 0x21, 0x00, 0x7F, 0x22, 0x00, 0x07 };
+  static const uint8_t addr_cmds[] = { 0x21, 0x00, 0x7F, 0x22, 0x00, 0x07 };
 
   spi_transaction_t t;
   memset(&t, 0, sizeof(t));
 
-  digitalWrite(17, LOW);
-  t.length = sizeof(scroll_cmds) * 8;
-  t.tx_buffer = scroll_cmds;
+  digitalWrite(21, LOW);              // DC 低 = 命令
+  t.length = sizeof(addr_cmds) * 8;
+  t.tx_buffer = addr_cmds;
   spi_device_transmit(HAL::spi_handle, &t);
 
-  digitalWrite(17, HIGH);
+  digitalWrite(21, HIGH);             // DC 高 = 数据
   t.length = 1024 * 8;
   t.tx_buffer = getDisplay()->getBufferPtr();
-
-  spi_device_queue_trans(HAL::spi_handle, &t, portMAX_DELAY);
+  spi_device_transmit(HAL::spi_handle, &t);  // 阻塞等待 DMA 完成
 }
