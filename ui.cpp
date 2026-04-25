@@ -161,12 +161,12 @@ void MenuManager::handleInput() {
           } else if (setIdx == 8) sysCfg.auto_sleep = !sysCfg.auto_sleep;
         }
 
-        if (evt == BTN_LEFT_PRESSED) { isEditing = false; }
-        if (evt == BTN_RIGHT_PRESSED) {
+        if (evt == BTN_LEFT_PRESSED) {
           sysCfg = tempCfg;
           HAL::getDisplay()->setContrast(sysCfg.contrast * 51);
           isEditing = false;
         }
+        if (evt == BTN_RIGHT_PRESSED) { isEditing = false; }
       }
       break;
 
@@ -311,8 +311,8 @@ void MenuManager::update() {
   if (ox + 1280 > -128 && ox + 1280 < 128) drawSport3(ox + 1280);
   if (ox + 1408 > -128 && ox + 1408 < 128) drawSummary(ox + 1408);
 
-  //u8g2->sendBuffer();
-  HAL::Flush();
+  u8g2->sendBuffer();
+  //HAL::Flush();
 }
 
 void MenuManager::drawSplash(int ox) {
