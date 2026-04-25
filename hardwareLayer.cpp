@@ -157,22 +157,7 @@ void HAL::sleepDevice() {
 
 
 void HAL::InitDMA() {
-  // 完整接管 SPI 总线（不依赖 Arduino SPI / Peripheral Manager）
-  spi_bus_config_t buscfg;
-  memset(&buscfg, 0, sizeof(buscfg));
-  buscfg.mosi_io_num = 22;
-  buscfg.miso_io_num = -1;
-  buscfg.sclk_io_num = 23;
-  buscfg.quadwp_io_num = -1;
-  buscfg.quadhd_io_num = -1;
-  buscfg.max_transfer_sz = 1024;
-
-  esp_err_t ret = spi_bus_initialize(SPI1_HOST, &buscfg, SPI_DMA_CH_AUTO);
-  if (ret != ESP_OK) {
-    Serial.printf("DMA: spi_bus_initialize failed: %d\n", ret);
-    return;
-  }
-
+  // Arduino 框架已初始化 SPI1_HOST（Peripheral Manager），直接添加设备
   spi_device_interface_config_t devcfg;
   memset(&devcfg, 0, sizeof(devcfg));
   devcfg.clock_speed_hz = 40 * 1000 * 1000;
@@ -181,7 +166,7 @@ void HAL::InitDMA() {
   devcfg.queue_size = 1;
   devcfg.flags = SPI_DEVICE_NO_DUMMY;
 
-  ret = spi_bus_add_device(SPI1_HOST, &devcfg, &HAL::spi_handle);
+  esp_err_t ret = spi_bus_add_device(SPI1_HOST, &devcfg, &HAL::spi_handle);
   if (ret != ESP_OK) {
     Serial.printf("DMA: spi_bus_add_device failed: %d\n", ret);
   }
