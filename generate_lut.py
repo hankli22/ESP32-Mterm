@@ -37,10 +37,10 @@ def gen():
     out.append(f"static const float tan_lut[{N}] = {{")
     for i in range(N):
         if (i - 90) % 180 == 0:
-            v = float('nan')
+            out.append("  0.0f/0.0f,")
         else:
             v = math.tan(math.radians(i))
-        out.append(f"  {v:11.7f}f,")
+            out.append(f"  {v:11.7f}f,")
     out.append("};")
     out.append("")
 

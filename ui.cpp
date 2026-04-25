@@ -620,7 +620,7 @@ void MenuManager::drawSatGui(int ox) {
         if (sec < 0) continue;
 
         uint8_t th = sysCfg.en_multycol ? density[sec] : 16;
-        if (bayer[py - cy & 3][px - cx & 3] < th) {
+        if (bayer[(py - cy) & 3][(px - cx) & 3] < th) {
           buf[rowOff + px] |= bit;
         }
       }
