@@ -30,7 +30,7 @@ static uint8_t dmaByteCB(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_p
         memset(&t, 0, sizeof(t));
         t.length = arg_int * 8;
         t.tx_buffer = arg_ptr;
-        spi_device_transmit(HAL::spi_handle, &t);
+        spi_device_transmit(HAL::getSpiHandle(), &t);
       }
       break;
   }

@@ -31,6 +31,7 @@ public:
   static int getBatteryPercent();
   static void InitDMA();  // 在 setup 初始化时调用
   static void Flush();    // 替代 sendBuffer()
+  static spi_device_handle_t getSpiHandle() { return spi_handle; }
 private:
   static BtnEvent lastEvent;
   static spi_device_handle_t spi_handle;
