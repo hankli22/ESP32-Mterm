@@ -48,6 +48,7 @@ public:
   static int accuracyPct;
   static double altitude;
   static double course;
+  static bool homeSet;
   static double homeLat, homeLng, lastLat, lastLng;
 
   static LapInfo lapHistory[MAX_LAPS];

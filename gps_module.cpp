@@ -16,6 +16,7 @@ int GPSCalc::accuracyPct = 0;
 
 double GPSCalc::altitude = 0;
 double GPSCalc::course = 0;
+bool GPSCalc::homeSet = false;
 double GPSCalc::homeLat = 0, GPSCalc::homeLng = 0;
 double GPSCalc::lastLat = 0, GPSCalc::lastLng = 0;
 
@@ -68,6 +69,7 @@ void GPSCalc::startRun() {
   totalDistance = 0;
   laps = 0;
   trackPointsCount = 0;
+  homeSet = false;
   homeLat = 0;
   durationSec = 0;
   maxSpeed = 0;
@@ -188,8 +190,9 @@ void GPSCalc::process() {
     calories = (int)((totalDistance / 1000.0f) * 60.0f * 1.036f);
   }
 
-  if (homeLat == 0) {
+  if (!homeSet) {
     if (satellites > 4 && gps.hdop.hdop() < 2.5) {
+      homeSet = true;
       homeLat = lat;
       homeLng = lng;
       lastLat = lat;
