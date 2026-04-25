@@ -598,15 +598,20 @@ void MenuManager::drawSatGui(int ox) {
     }
     const uint8_t density[4] = { 12, 8, 4, 16 };
 
-    // 直接写 U8g2 帧缓冲，避免 ~760 次 drawPixel 调用开销
+    // 直接写 U8g2 帧缓冲（裁剪到显示区域内）
     uint8_t *buf = u8g2->getBufferPtr();
     int rSq = r * r;
-    for (int py = cy - r; py <= cy + r; py++) {
+    int py0 = max(cy - r, 0);
+    int py1 = min(cy + r, 63);
+    int px0 = max(cx - r, 0);
+    int px1 = min(cx + r, 127);
+    for (int py = py0; py <= py1; py++) {
       uint8_t page = py >> 3;
       uint8_t bit  = 1 << (py & 7);
       int rowOff = page * 128;
-      for (int px = cx - r; px <= cx + r; px++) {
-        int dx = px - cx, dy = py - cy;
+      int dy = py - cy;
+      for (int px = px0; px <= px1; px++) {
+        int dx = px - cx;
         if (dx * dx + dy * dy > rSq) continue;
 
         int sec = -1;
