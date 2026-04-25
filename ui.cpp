@@ -552,8 +552,9 @@ void MenuManager::drawSatGui(int ox) {
   auto u8g2 = HAL::getDisplay();
   u8g2->setFont(u8g2_font_4x6_tf);
   const char* sName[] = { "GPS", "BDS", "GLO", "SBS" };
+  // 显示顺序：BDS 优先，避免被挤出屏幕
+  const uint8_t drawOrder[] = { 1, 0, 2, 3 };
 
-  // Bayer 4x4 有序抖动矩阵
   static const uint8_t bayer[4][4] = {
     { 0,  8,  2, 10},
     {12,  4, 14,  6},
@@ -567,39 +568,46 @@ void MenuManager::drawSatGui(int ox) {
   u8g2->drawCircle(cx, cy, r);
 
   if (total > 0) {
-    // 预计算扇区边界角度 (从 12 点方向顺时针)
-    float secStart[4], secSweep[4];
-    int validSys[4], validN = 0;
-    float ang = -PI / 2;
-    for (int i = 0; i < 4; i++) {
-      if (GPSCalc::sysTracked[i] == 0) continue;
-      secStart[validN] = ang;
-      secSweep[validN] = (GPSCalc::sysTracked[i] / (float)total) * 2 * PI;
-      validSys[validN] = i;
-      validN++;
-      ang += secSweep[validN - 1];
+    // 预计算扇区边界（12 点方向顺时针，按 drawOrder 排列）
+    float startAng[4], endAng[4];
+    uint8_t secSys[4];
+    int secN = 0;
+    float cur = -PI / 2;
+    for (int di = 0; di < 4; di++) {
+      uint8_t s = drawOrder[di];
+      if (GPSCalc::sysTracked[s] == 0) continue;
+      float sweep = (GPSCalc::sysTracked[s] / (float)total) * 2 * PI;
+      startAng[secN] = cur;
+      endAng[secN]   = cur + sweep;
+      secSys[secN]   = s;
+      secN++;
+      cur += sweep;
     }
-    // 各系统抖动阈值：GPS≈75% BDS≈50% GLO≈25% SBS≈100%(实心)
+
+    // 预计算各扇区边界法向量，用于替代 atan2f 的半平面测试
+    // 扇区从 startAng 到 endAng (顺时针)，点在扇区内需满足:
+    //   cos(start)*dx + sin(start)*dy >= 0  (CW 于起始边)
+    //   cos(end)*dx   + sin(end)*dy   <= 0  (CCW 于终止边)
+    float sn[4], cs[4], en[4], ce[4];
+    for (int i = 0; i < secN; i++) {
+      cs[i] = cosf(startAng[i]); sn[i] = sinf(startAng[i]);
+      ce[i] = cosf(endAng[i]);   en[i] = sinf(endAng[i]);
+    }
     const uint8_t density[4] = { 12, 8, 4, 16 };
 
-    // 逐像素填充抖动扇形
+    // 逐像素填充（用半平面测试替代 atan2f，快约 10 倍）
     int rSq = r * r;
     for (int py = cy - r; py <= cy + r; py++) {
       for (int px = cx - r; px <= cx + r; px++) {
         int dx = px - cx, dy = py - cy;
         if (dx * dx + dy * dy > rSq) continue;
 
-        float a = atan2f(dy, dx) + PI / 2;
-        if (a < 0) a += 2 * PI;
-
         int sec = -1;
-        float cur = 0;
-        for (int s = 0; s < validN; s++) {
-          if (a >= cur && a < cur + secSweep[s]) {
-            sec = validSys[s];
+        for (int s = 0; s < secN; s++) {
+          if (cs[s] * dx + sn[s] * dy >= 0 && ce[s] * dx + en[s] * dy <= 0) {
+            sec = secSys[s];
             break;
           }
-          cur += secSweep[s];
         }
         if (sec < 0) continue;
 
@@ -611,13 +619,14 @@ void MenuManager::drawSatGui(int ox) {
     }
 
     // 扇区分隔线 + 标签
-    for (int i = 0; i < validN; i++) {
-      float a = secStart[i];
-      u8g2->drawLine(cx, cy, cx + r * cos(a), cy + r * sin(a));
-      int lx = cx + (r + 8) * cos(a + secSweep[i] / 2) - 6;
-      int ly = cy + (r + 8) * sin(a + secSweep[i] / 2) + 2;
+    for (int i = 0; i < secN; i++) {
+      float a = startAng[i];
+      u8g2->drawLine(cx, cy, cx + r * cosf(a), cy + r * sinf(a));
+      float mid = a + (endAng[i] - startAng[i]) / 2;
+      int lx = cx + (r + 8) * cosf(mid) - 6;
+      int ly = cy + (r + 8) * sinf(mid) + 2;
       u8g2->setCursor(lx, ly);
-      u8g2->print(sName[validSys[i]]);
+      u8g2->print(sName[secSys[i]]);
     }
   } else {
     u8g2->drawStr(cx - 10, cy + 2, "NO SAT");
