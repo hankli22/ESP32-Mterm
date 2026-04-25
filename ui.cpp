@@ -584,18 +584,16 @@ void MenuManager::drawSatGui(int ox) {
       cur += sweep;
     }
 
-    // 预计算各扇区边界法向量，用于替代 atan2f 的半平面测试
-    // 扇区从 startAng 到 endAng (顺时针)，点在扇区内需满足:
-    //   cos(start)*dx + sin(start)*dy >= 0  (CW 于起始边)
-    //   cos(end)*dx   + sin(end)*dy   <= 0  (CCW 于终止边)
+    // 预计算各扇区边界法向量 + sweep 标志，替代 atan2f
     float sn[4], cs[4], en[4], ce[4];
+    bool wide[4];  // sweep > PI 需反转判据
     for (int i = 0; i < secN; i++) {
       cs[i] = cosf(startAng[i]); sn[i] = sinf(startAng[i]);
       ce[i] = cosf(endAng[i]);   en[i] = sinf(endAng[i]);
+      wide[i] = (endAng[i] - startAng[i]) > PI;
     }
     const uint8_t density[4] = { 12, 8, 4, 16 };
 
-    // 逐像素填充（用半平面测试替代 atan2f，快约 10 倍）
     int rSq = r * r;
     for (int py = cy - r; py <= cy + r; py++) {
       for (int px = cx - r; px <= cx + r; px++) {
@@ -604,10 +602,10 @@ void MenuManager::drawSatGui(int ox) {
 
         int sec = -1;
         for (int s = 0; s < secN; s++) {
-          if (cs[s] * dx + sn[s] * dy >= 0 && ce[s] * dx + en[s] * dy <= 0) {
-            sec = secSys[s];
-            break;
-          }
+          bool cw  = cs[s] * dx + sn[s] * dy >= 0;  // CW 于起始边
+          bool ccw = ce[s] * dx + en[s] * dy <= 0;  // CCW 于终止边
+          bool inSec = wide[s] ? (cw || ccw) : (cw && ccw);
+          if (inSec) { sec = secSys[s]; break; }
         }
         if (sec < 0) continue;
 
