@@ -117,7 +117,8 @@ void HAL::sleepDevice() {
   digitalWrite(GPS_PWR_MOSFET, HIGH);
 
   // -- ESP32-C6 深睡（当前平台）--
-  // C6 的 pinMode 仅配活跃模式，深睡时配置丢失，需 gpio_sleep_* 独立设置
+  // 使用 esp_deep_sleep_enable_gpio_wakeup 而非 esp_sleep_enable_ext1_wakeup
+  // C6 上后者无效；pinMode 仅设活跃模式，深睡时需 gpio_sleep_* 独立配置
   const uint8_t btns[] = { BTN_UP, BTN_DOWN, BTN_LEFT, BTN_RIGHT };
   uint64_t mask = 0;
   for (int i = 0; i < 4; i++) {
@@ -126,7 +127,7 @@ void HAL::sleepDevice() {
     mask |= 1ULL << btns[i];
   }
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
-  esp_sleep_enable_ext1_wakeup(mask, ESP_EXT1_WAKEUP_ANY_LOW);
+  esp_deep_sleep_enable_gpio_wakeup(mask, ESP_GPIO_WAKEUP_GPIO_LOW);
   esp_deep_sleep_start();
 
   // -- 原始 ESP32 深睡（保留参考）--
