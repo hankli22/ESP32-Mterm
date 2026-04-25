@@ -2,6 +2,7 @@
 #include "hardwareLayer.h"
 #include "gps_module.h"
 #include "config.h"
+#include "trig_lut.h"
 
 PageState MenuManager::currentPage = PAGE_SPLASH;
 int MenuManager::cursorIndex = 0;
@@ -552,8 +553,7 @@ void MenuManager::drawSatGui(int ox) {
   auto u8g2 = HAL::getDisplay();
   u8g2->setFont(u8g2_font_4x6_tf);
   const char* sName[] = { "GPS", "BDS", "GLO", "SBS" };
-  // 显示顺序：BDS 优先，避免被挤出屏幕
-  const uint8_t drawOrder[] = { 1, 0, 2, 3 };
+  const uint8_t drawOrder[] = { 1, 0, 2, 3 };  // BDS 优先
 
   static const uint8_t bayer[4][4] = {
     { 0,  8,  2, 10},
@@ -568,7 +568,7 @@ void MenuManager::drawSatGui(int ox) {
   u8g2->drawCircle(cx, cy, r);
 
   if (total > 0) {
-    // 预计算扇区边界（12 点方向顺时针，按 drawOrder 排列）
+    // 预计算扇区边界（12 点方向顺时针）
     float startAng[4], endAng[4];
     uint8_t secSys[4];
     int secN = 0;
@@ -584,45 +584,60 @@ void MenuManager::drawSatGui(int ox) {
       cur += sweep;
     }
 
-    // 预计算各扇区边界法向量 + sweep 标志，替代 atan2f
+    // 预计算扇区边界法向量（用 LUT 替代 cosf/sinf）
     float sn[4], cs[4], en[4], ce[4];
-    bool wide[4];  // sweep > PI 需反转判据
+    bool wide[4];
     for (int i = 0; i < secN; i++) {
-      cs[i] = cosf(startAng[i]); sn[i] = sinf(startAng[i]);
-      ce[i] = cosf(endAng[i]);   en[i] = sinf(endAng[i]);
+      int sd = (int)(startAng[i] * 57.29578f + 0.5f);
+      int ed = (int)(endAng[i]   * 57.29578f + 0.5f);
+      sd = (sd % 360 + 360) % 360;
+      ed = (ed % 360 + 360) % 360;
+      cs[i] = cos_lut[sd]; sn[i] = sin_lut[sd];
+      ce[i] = cos_lut[ed]; en[i] = sin_lut[ed];
       wide[i] = (endAng[i] - startAng[i]) > PI;
     }
     const uint8_t density[4] = { 12, 8, 4, 16 };
 
+    // 直接写 U8g2 帧缓冲，避免 ~760 次 drawPixel 调用开销
+    uint8_t *buf = u8g2->getBufferPtr();
     int rSq = r * r;
     for (int py = cy - r; py <= cy + r; py++) {
+      uint8_t page = py >> 3;
+      uint8_t bit  = 1 << (py & 7);
+      int rowOff = page * 128;
       for (int px = cx - r; px <= cx + r; px++) {
         int dx = px - cx, dy = py - cy;
         if (dx * dx + dy * dy > rSq) continue;
 
         int sec = -1;
         for (int s = 0; s < secN; s++) {
-          bool cw  = cs[s] * dx + sn[s] * dy >= 0;  // CW 于起始边
-          bool ccw = ce[s] * dx + en[s] * dy <= 0;  // CCW 于终止边
-          bool inSec = wide[s] ? (cw || ccw) : (cw && ccw);
-          if (inSec) { sec = secSys[s]; break; }
+          bool cw  = cs[s] * dx + sn[s] * dy >= 0;
+          bool ccw = ce[s] * dx + en[s] * dy <= 0;
+          if (wide[s] ? (cw || ccw) : (cw && ccw)) {
+            sec = secSys[s]; break;
+          }
         }
         if (sec < 0) continue;
 
         uint8_t th = sysCfg.en_multycol ? density[sec] : 16;
-        if (bayer[(py - cy) & 3][(px - cx) & 3] < th) {
-          u8g2->drawPixel(px, py);
+        if (bayer[py - cy & 3][px - cx & 3] < th) {
+          buf[rowOff + px] |= bit;
         }
       }
     }
 
-    // 扇区分隔线 + 标签
+    // 扇区分隔线 + 标签（用 LUT）
     for (int i = 0; i < secN; i++) {
-      float a = startAng[i];
-      u8g2->drawLine(cx, cy, cx + r * cosf(a), cy + r * sinf(a));
-      float mid = a + (endAng[i] - startAng[i]) / 2;
-      int lx = cx + (r + 8) * cosf(mid) - 6;
-      int ly = cy + (r + 8) * sinf(mid) + 2;
+      int ad = (int)(startAng[i] * 57.29578f + 0.5f);
+      ad = (ad % 360 + 360) % 360;
+      float sa_cos = cos_lut[ad], sa_sin = sin_lut[ad];
+      u8g2->drawLine(cx, cy, cx + r * sa_cos, cy + r * sa_sin);
+
+      int md = (int)((startAng[i] + endAng[i]) * 0.5f * 57.29578f + 0.5f);
+      md = (md % 360 + 360) % 360;
+      float mid_cos = cos_lut[md], mid_sin = sin_lut[md];
+      int lx = cx + (r + 8) * mid_cos - 6;
+      int ly = cy + (r + 8) * mid_sin + 2;
       u8g2->setCursor(lx, ly);
       u8g2->print(sName[secSys[i]]);
     }
