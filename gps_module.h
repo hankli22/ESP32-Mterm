@@ -80,5 +80,6 @@ private:
   static uint32_t runStartTime;
   static uint32_t lastLapTime;
   static uint32_t lastTrackSaveTime;
+  static float distanceAtLastLap;
 };
 #endif

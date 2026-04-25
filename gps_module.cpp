@@ -32,6 +32,7 @@ float GPSCalc::lastDistForPace = 0;
 uint32_t GPSCalc::runStartTime = 0;
 uint32_t GPSCalc::lastLapTime = 0;
 uint32_t GPSCalc::lastTrackSaveTime = 0;
+float GPSCalc::distanceAtLastLap = 0;
 
 SatData GPSCalc::sats[40];
 int GPSCalc::satCount = 0;
@@ -78,6 +79,7 @@ void GPSCalc::startRun() {
   lastLapTime = millis();
   for (int i = 0; i < PACE_WINDOW_SIZE; i++) paceBuffer[i] = 0;
   lastDistForPace = 0;
+  distanceAtLastLap = 0;
   lastPaceUpdate = millis();
   lapHistory[0].trackStartIdx = 0;
 }
@@ -218,8 +220,8 @@ void GPSCalc::process() {
   }
 
   float distToHome = calcDist(lat, lng, homeLat, homeLng);
-  //回到起点 15 米内，且本圈已经跑了至少 200 米
-  if (distToHome < 15.0f && totalDistance > (laps * 250.0f + 200.0f)) {
+  // 回到起点 15 米内，且本圈已经跑了至少 200 米
+  if (distToHome < 15.0f && (totalDistance - distanceAtLastLap) > 200.0f) {
     if (laps < MAX_LAPS) {
       lapHistory[laps].timeSec = (now - lastLapTime) / 1000;
       if (lapHistory[laps].timeSec > 0) {
@@ -227,6 +229,7 @@ void GPSCalc::process() {
       }
       lapHistory[laps].trackEndIdx = (trackPointsCount > 0) ? trackPointsCount - 1 : 0;
       laps++;
+      distanceAtLastLap = totalDistance;
       if (laps < MAX_LAPS) {
         lapHistory[laps].trackStartIdx = trackPointsCount;
       }
