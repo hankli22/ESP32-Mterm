@@ -122,16 +122,20 @@ void HAL::sleepDevice() {
 
 
 void HAL::InitDMA() {
-  // SPI 总线已由 SPI.begin() 初始化，仅需添加设备句柄供 DMA 使用
+  // SPI 总线已由 SPI.begin() 初始化 (VSPI = SPI3_HOST)，
+  // 仅需添加设备句柄供 DMA 使用
   spi_device_interface_config_t devcfg;
   memset(&devcfg, 0, sizeof(devcfg));
   devcfg.clock_speed_hz = 40 * 1000 * 1000;
   devcfg.mode = 0;
   devcfg.spics_io_num = -1;   // CS 硬件接地，与 U8g2 的 U8X8_PIN_NONE 一致
-  devcfg.queue_size = 1;      // Flush 每次只发一帧，无需深队列
+  devcfg.queue_size = 1;
   devcfg.flags = SPI_DEVICE_NO_DUMMY;
 
-  spi_bus_add_device(SPI2_HOST, &devcfg, &HAL::spi_handle);
+  esp_err_t ret = spi_bus_add_device(SPI3_HOST, &devcfg, &HAL::spi_handle);
+  if (ret != ESP_OK) {
+    Serial.printf("DMA: spi_bus_add_device failed: %d\n", ret);
+  }
 }
 
 void HAL::Flush() {
