@@ -119,7 +119,7 @@ String GPSCalc::getDateTime() {
 
 void GPSCalc::process() {
   lock();
-  static char nmeaBuf[85];
+  static char nmeaBuf[128];
   static int nmeaPos = 0;
 
   while (Serial1.available() > 0) {
@@ -133,7 +133,7 @@ void GPSCalc::process() {
       nmeaBuf[nmeaPos] = 0;
       if (nmeaPos > 10) parseGSV(nmeaBuf);
       nmeaPos = 0;
-    } else if (nmeaPos < 84) {
+    } else if (nmeaPos < (int)sizeof(nmeaBuf) - 1) {
       nmeaBuf[nmeaPos++] = c;
     }
   }
@@ -240,7 +240,8 @@ void GPSCalc::process() {
 }
 
 void GPSCalc::parseGSV(const char* nmea) {
-  if (strncmp(nmea + 3, "GSV", 3) != 0) return;
+  int len = strlen(nmea);
+  if (len < 6 || strncmp(nmea + 3, "GSV", 3) != 0) return;
 
   uint8_t sys = 3;                                     // 默认 SBS/其他
   if (nmea[1] == 'G' && nmea[2] == 'P') sys = 0;       // GPS
