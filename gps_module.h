@@ -3,6 +3,8 @@
 
 #include <Arduino.h>
 #include <TinyGPS++.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 #define MAX_LAPS 10
 #define MAX_TRACK_POINTS 180
@@ -60,10 +62,14 @@ public:
 
   static bool isGpsReady();
 
+  static void lock();
+  static void unlock();
+
   static double rawLat, rawLng;
   static float maxSpeed;
   static int calories;
 private:
+  static SemaphoreHandle_t mutex;
   static void parseGSV(const char* nmea);
   static void cleanupSats();
   static float paceBuffer[PACE_WINDOW_SIZE];

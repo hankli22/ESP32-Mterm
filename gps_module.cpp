@@ -45,7 +45,18 @@ int GPSCalc::calories = 0;
 static TinyGPSPlus gps;
 static TinyGPSCustom satsInViewCustom(gps, "GPGSV", 3);
 
+SemaphoreHandle_t GPSCalc::mutex = nullptr;
+
+void GPSCalc::lock() {
+  if (mutex) xSemaphoreTake(mutex, portMAX_DELAY);
+}
+
+void GPSCalc::unlock() {
+  if (mutex) xSemaphoreGive(mutex);
+}
+
 void GPSCalc::init() {
+  mutex = xSemaphoreCreateMutex();
   Serial1.begin(9600, SERIAL_8N1, 17, 18);
   if (sysCfg.record_freq >= 5.0) Serial1.println("$PCAS02,200*1D");
   else if (sysCfg.record_freq >= 2.0) Serial1.println("$PCAS02,500*1A");
@@ -103,6 +114,7 @@ String GPSCalc::getDateTime() {
 
 
 void GPSCalc::process() {
+  lock();
   static char nmeaBuf[85];
   static int nmeaPos = 0;
 
@@ -143,7 +155,7 @@ void GPSCalc::process() {
     currentSpeed = gps.speed.kmph();
   }
 
-  if (!isRunning || !gps.location.isValid() || gps.location.age() > 2000) return;
+  if (!isRunning || !gps.location.isValid() || gps.location.age() > 2000) { unlock(); return; }
 
   uint32_t now = millis();
   durationSec = (now - runStartTime) / 1000;
@@ -185,7 +197,7 @@ void GPSCalc::process() {
       lastLapTime = now;
       if (laps < MAX_LAPS) lapHistory[laps].trackStartIdx = trackPointsCount;
     }
-    return;
+    unlock(); return;
   }
 
   float d = calcDist(lat, lng, lastLat, lastLng);
@@ -218,6 +230,7 @@ void GPSCalc::process() {
     }
     lastLapTime = now;
   }
+  unlock();
 }
 
 void GPSCalc::parseGSV(const char* nmea) {

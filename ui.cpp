@@ -278,6 +278,7 @@ void MenuManager::update() {
   }
   if (isScreenOff) return;
 
+  GPSCalc::lock();
   auto u8g2 = HAL::getDisplay();
   u8g2->clearBuffer();
 
@@ -311,6 +312,7 @@ void MenuManager::update() {
   if (ox + 1280 > -128 && ox + 1280 < 128) drawSport3(ox + 1280);
   if (ox + 1408 > -128 && ox + 1408 < 128) drawSummary(ox + 1408);
 
+  GPSCalc::unlock();
   u8g2->sendBuffer();
   //HAL::Flush();
 }
