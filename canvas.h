@@ -83,7 +83,7 @@ public:
     u8g2_t* u = u8g2->getU8g2();
     uint8_t* save = u->tile_buf_ptr;
     u->tile_buf_ptr = buf;
-    int w = u8g2->drawStr(x, y, s);
+    int w = u8g2->drawUTF8(x, y, s);
     u->tile_buf_ptr = save;
     return w;
   }

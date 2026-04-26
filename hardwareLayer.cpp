@@ -100,6 +100,7 @@ U8G2* HAL::getDisplay() {
 void HAL::sleepDevice() {
   u8g2.clearBuffer();
   u8g2.setFont(u8g2_font_6x12_tr);
+  u8g2.enableUTF8Print();
   u8g2.drawStr(15, 30, "Release Button");
   u8g2.drawStr(15, 45, "to Power Off...");
   u8g2.sendBuffer();
