@@ -88,13 +88,15 @@ public:
     return w;
   }
 
-  void print(const char* s)   { cursorX += drawStr(cursorX, cursorY, s); }
-  void print(int n)           { char b[12]; snprintf(b, sizeof(b), "%d", n); print(b); }
-  void print(unsigned int n)  { char b[12]; snprintf(b, sizeof(b), "%u", n); print(b); }
-  void print(float f)         { print(f, 2); }
-  void print(double f)        { print((float)f, 2); }
-  void print(float f, int d)  { char b[16]; dtostrf(f, 1, d, b); print(b); }
-  void print(double f, int d) { char b[16]; dtostrf((float)f, 1, d, b); print(b); }
+  void print(const char* s)       { cursorX += drawStr(cursorX, cursorY, s); }
+  void print(int n)               { char b[12]; snprintf(b, sizeof(b), "%d", n); print(b); }
+  void print(unsigned int n)      { char b[12]; snprintf(b, sizeof(b), "%u", n); print(b); }
+  void print(long n)              { char b[12]; snprintf(b, sizeof(b), "%ld", n); print(b); }
+  void print(unsigned long n)     { char b[12]; snprintf(b, sizeof(b), "%lu", n); print(b); }
+  void print(float f)             { print(f, 2); }
+  void print(double f)            { print((float)f, 2); }
+  void print(float f, int d)      { char b[16]; dtostrf(f, 1, d, b); print(b); }
+  void print(double f, int d)     { char b[16]; dtostrf((float)f, 1, d, b); print(b); }
 
   // UTF-8 versions (redirect to drawStr)
   int drawUTF8(int x, int y, const char* s) { return drawStr(x, y, s); }
