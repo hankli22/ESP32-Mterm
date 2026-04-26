@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(python generate_lut.py)",
+      "Bash(grep -v '^\\\\.git$\\\\|^\\\\.claude$')",
+      "Bash(git status *)",
+      "Bash(git restore *)",
+      "Bash(git mv *)"
+    ]
+  }
+}
