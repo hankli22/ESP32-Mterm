@@ -8,7 +8,8 @@
       "Bash(grep -v '^\\\\.git$\\\\|^\\\\.claude$')",
       "Bash(git status *)",
       "Bash(git restore *)",
-      "Bash(git mv *)"
+      "Bash(git mv *)",
+      "Bash(git *)"
     ]
   }
 }
