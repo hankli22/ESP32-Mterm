@@ -20,7 +20,8 @@ class MenuManager {
 public:
   static void handleInput();
   static void update();
-private:
+
+  // Public state — accessed by page renderers
   static PageState currentPage;
   static int cursorIndex;
   static bool isCursorVisible;
@@ -28,38 +29,23 @@ private:
   static int setScroll;
   static bool isEditing;
   static int viewLapIdx;
+  static int devMenuIdx;
+  static int satTxtScroll;
+  static int devScroll;
 
-  static uint32_t lastActiveTime;
-  static bool isScreenOff;
-
+  // Animation state — updated each frame by update()
   static float currentCursorY;
   static float currentPageX;
   static float visualSetCursorY;
   static float visualSetScrollY;
-
-  static void drawSplash(int ox);
-  static void drawStartMenu(int ox);
-  static void drawSettings(int ox);
-  static void drawDevPage(int ox);
-  static void drawSport1(int ox);
-  static void drawSport2(int ox);
-  static void drawSummary(int ox);
-  static void drawTrackMap(int ox, int oy, int lapIdx);
-  static void drawDevMenu(int ox);
-  static void drawSatTxt(int ox);
-  static void drawSatGui(int ox);
-
-  static float smoothLerp(float current, float target, float speed = 0.25f);
-
-  static int devMenuIdx;
-  static int satTxtScroll;
-
-  static int devScroll;
   static float visualDevCursorY;
   static float visualDevScrollY;
-  static void drawDevStat(int ox);
   static float visualSatTxtScrollY;
-  static void drawSport3(int ox);
+
+private:
+  static uint32_t lastActiveTime;
+  static bool isScreenOff;
+  static float smoothLerp(float current, float target, float speed = 0.25f);
 };
 
 #endif
