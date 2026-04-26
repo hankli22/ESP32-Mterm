@@ -3,7 +3,7 @@
 #include "gps_module.h"
 #include "config.h"
 #include "canvas.h"
-#include "pages.h"
+#include "ui/pages.h"
 
 PageState MenuManager::currentPage = PAGE_SPLASH;
 int MenuManager::cursorIndex = 0;
