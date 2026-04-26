@@ -17,7 +17,7 @@ public:
   uint8_t* getBufferPtr() { return buf; }
 
   void setDrawColor(uint8_t c) { u8g2->setDrawColor(c); }
-  void setFont(const uint8_t* f) { u8g2->setFont(f); }
+  void setFont(const uint8_t* f) { u8g2->setFont(f); u8g2->enableUTF8Print(); }
   void setCursor(int x, int y) { cursorX = x; cursorY = y; u8g2->setCursor(x, y); }
 
   // --- Pixel ops ---
