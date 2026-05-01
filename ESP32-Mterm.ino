@@ -31,7 +31,7 @@ void setup() {
   HAL::init();
   GPSCalc::init();
 
-  xTaskCreatePinnedToCore(uiTask, "UI", 4096, NULL, 1, &uiTaskHandle, 0);
+  xTaskCreatePinnedToCore(uiTask, "UI", 8192, NULL, 1, &uiTaskHandle, 0);
   xTaskCreatePinnedToCore(logicTask, "Logic", 4096, NULL, 2, &logicTaskHandle, 0);
 }
 

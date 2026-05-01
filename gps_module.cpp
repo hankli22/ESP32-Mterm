@@ -1,5 +1,6 @@
 #include "gps_module.h"
 #include "config.h"
+#include "ui.h"
 
 bool GPSCalc::isRunning = false;
 float GPSCalc::totalDistance = 0;
@@ -122,19 +123,21 @@ void GPSCalc::process() {
   static char nmeaBuf[128];
   static int nmeaPos = 0;
 
-  while (Serial1.available() > 0) {
-    char c = Serial1.read();
-    gps.encode(c);
+  if (!MenuManager::usbBridgeActive) {
+    while (Serial1.available() > 0) {
+      char c = Serial1.read();
+      gps.encode(c);
 
-    if (c == '$') {
-      nmeaPos = 0;
-      nmeaBuf[nmeaPos++] = c;
-    } else if (c == '\n' || c == '\r') {
-      nmeaBuf[nmeaPos] = 0;
-      if (nmeaPos > 10) parseGSV(nmeaBuf);
-      nmeaPos = 0;
-    } else if (nmeaPos < (int)sizeof(nmeaBuf) - 1) {
-      nmeaBuf[nmeaPos++] = c;
+      if (c == '$') {
+        nmeaPos = 0;
+        nmeaBuf[nmeaPos++] = c;
+      } else if (c == '\n' || c == '\r') {
+        nmeaBuf[nmeaPos] = 0;
+        if (nmeaPos > 10) parseGSV(nmeaBuf);
+        nmeaPos = 0;
+      } else if (nmeaPos < (int)sizeof(nmeaBuf) - 1) {
+        nmeaBuf[nmeaPos++] = c;
+      }
     }
   }
 

@@ -18,6 +18,7 @@ int MenuManager::devScroll = 0;
 int MenuManager::usbBridgeBaudIdx = 0;
 unsigned long MenuManager::usbBridgeBytesRx = 0;
 unsigned long MenuManager::usbBridgeBytesTx = 0;
+bool MenuManager::usbBridgeActive = false;
 
 uint32_t MenuManager::lastActiveTime = 0;
 bool MenuManager::isScreenOff = false;
@@ -197,7 +198,9 @@ void MenuManager::handleInput() {
           usbBridgeBaudIdx = 0;
           usbBridgeBytesRx = 0;
           usbBridgeBytesTx = 0;
-          Serial1.updateBaudRate(9600);
+          usbBridgeActive = true;
+          Serial1.end();
+          Serial1.begin(9600, SERIAL_8N1, 17, 18);
         }
       }
       if (devMenuIdx < devScroll) devScroll = devMenuIdx;
@@ -209,22 +212,24 @@ void MenuManager::handleInput() {
     case PAGE_USB_BRIDGE:
       if (evt == BTN_LEFT_PRESSED) {
         if (currentPage == PAGE_USB_BRIDGE) {
-          Serial1.updateBaudRate(9600);
+          usbBridgeActive = false;
+          Serial1.end();
+          Serial1.begin(9600, SERIAL_8N1, 17, 18);
         }
         currentPage = PAGE_DEV_MENU;
       }
       if (currentPage == PAGE_USB_BRIDGE) {
-        if (evt == BTN_UP_PRESSED) {
-          usbBridgeBaudIdx++;
-          if (usbBridgeBaudIdx > 4) usbBridgeBaudIdx = 0;
+        if (evt == BTN_UP_PRESSED || evt == BTN_DOWN_PRESSED) {
+          if (evt == BTN_UP_PRESSED) {
+            usbBridgeBaudIdx++;
+            if (usbBridgeBaudIdx > 4) usbBridgeBaudIdx = 0;
+          } else {
+            usbBridgeBaudIdx--;
+            if (usbBridgeBaudIdx < 0) usbBridgeBaudIdx = 4;
+          }
           const int bauds[] = { 9600, 19200, 38400, 57600, 115200 };
-          Serial1.updateBaudRate(bauds[usbBridgeBaudIdx]);
-        }
-        if (evt == BTN_DOWN_PRESSED) {
-          usbBridgeBaudIdx--;
-          if (usbBridgeBaudIdx < 0) usbBridgeBaudIdx = 4;
-          const int bauds[] = { 9600, 19200, 38400, 57600, 115200 };
-          Serial1.updateBaudRate(bauds[usbBridgeBaudIdx]);
+          Serial1.end();
+          Serial1.begin(bauds[usbBridgeBaudIdx], SERIAL_8N1, 17, 18);
         }
       }
       break;
@@ -369,8 +374,12 @@ void MenuManager::update() {
     }
     n = 256;
     while (Serial.available() && --n > 0) {
-      Serial1.write(Serial.read());
-      usbBridgeBytesTx++;
+      if (Serial1.availableForWrite() > 0) {
+        Serial1.write(Serial.read());
+        usbBridgeBytesTx++;
+      } else {
+        break;
+      }
     }
   }
 

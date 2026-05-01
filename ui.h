@@ -36,6 +36,7 @@ public:
   static int usbBridgeBaudIdx;
   static unsigned long usbBridgeBytesRx;
   static unsigned long usbBridgeBytesTx;
+  static bool usbBridgeActive;
 
   // Animation state — updated each frame by update()
   static float currentCursorY;
