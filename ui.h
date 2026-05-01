@@ -11,6 +11,7 @@ enum PageState { PAGE_SPLASH,
                  PAGE_SAT_TXT,
                  PAGE_SAT_GUI,
                  PAGE_DEV_STAT,
+                 PAGE_USB_BRIDGE,
                  PAGE_SPORT1,
                  PAGE_SPORT2,
                  PAGE_SPORT3,
@@ -32,6 +33,9 @@ public:
   static int devMenuIdx;
   static int satTxtScroll;
   static int devScroll;
+  static int usbBridgeBaudIdx;
+  static unsigned long usbBridgeBytesRx;
+  static unsigned long usbBridgeBytesTx;
 
   // Animation state — updated each frame by update()
   static float currentCursorY;
